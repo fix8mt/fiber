@@ -48,16 +48,16 @@ public:
 
    f8_fiber func (f8_fiber&& f, bool& flags)
    {
-      std::cout << "func:entry" << '\n';
-      std::cout << "caller id:" << f.get_id() << '\n';
+      std::cout << '\t' << "func:entry\n";
+      std::cout << '\t' << "caller id:" << f.get_id() << '\n';
       for (int kk{}; kk < _cnt; ++kk)
       {
          std::cout << '\t' << "func:" << kk << '\n';
          f.resume(f);
-         std::cout << '\t' << "func:resumed:" << kk << '\n';
+         std::cout << '\t' << "func:" << kk << " (resumed)\n";
       }
       flags = true;
-      std::cout << "func:exit\n";
+      std::cout << '\t' << "func:exit\n";
       return std::move(f);
    }
 };
@@ -74,7 +74,7 @@ int main(int argc, char *argv[])
    {
       std::cout << "main:" << ii << '\n';
       f0.resume(f0);
-      std::cout << "main:resumed:" << ii << '\n';
+      std::cout << "main:" << ii << " (resumed)\n";
    }
    std::cout << "flags=" << std::boolalpha << flags << '\n';
    std::cout << "main:exit\n";
@@ -83,34 +83,33 @@ int main(int argc, char *argv[])
 ```
 ### Output
 ```bash
-% ./f8fibertest3
-fiber id:0x7f57bac36f50
+fiber id:0x7fdcce843f50
 flags=false
 main:0
-func:entry
-caller id:0x7ffc60d6bf80
+        func:entry
+        caller id:0x7ffcd6370b30
         func:0
-main:resumed:0
+main:0 (resumed)
 main:1
-        func:resumed:0
+        func:0 (resumed)
         func:1
-main:resumed:1
+main:1 (resumed)
 main:2
-        func:resumed:1
+        func:1 (resumed)
         func:2
-main:resumed:2
+main:2 (resumed)
 main:3
-        func:resumed:2
+        func:2 (resumed)
         func:3
-main:resumed:3
+main:3 (resumed)
 main:4
-        func:resumed:3
+        func:3 (resumed)
         func:4
-main:resumed:4
+main:4 (resumed)
 main:5
-        func:resumed:4
-func:exit
-main:resumed:5
+        func:4 (resumed)
+        func:exit
+main:5 (resumed)
 flags=true
 main:exit
 %
