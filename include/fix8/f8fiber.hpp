@@ -191,7 +191,7 @@ public:
 	f8_fiber() noexcept = default;
 
 	template<typename Fn>
-	f8_fiber(Fn&& fn, size_t stacksz=8*1024*1024)
+	f8_fiber(Fn&& fn, size_t stacksz=0) // 0 selects SIGSTKSZ;
 		: fctx_ { create_fiber<f8_fiber_record<f8_fiber, Fn>>(std::forward<Fn>(fn), stacksz) } {}
 
 	virtual ~f8_fiber()

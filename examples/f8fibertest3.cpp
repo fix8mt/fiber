@@ -1,4 +1,7 @@
 //-----------------------------------------------------------------------------------------
+// f8_fiber based on boost::fiber, x86_64 / linux only / de-boosted
+// Modifications Copyright (C) 2022 Fix8 Market Technologies Pty Ltd
+//-----------------------------------------------------------------------------------------
 #include <iostream>
 #include <iomanip>
 #include <thread>
@@ -6,8 +9,9 @@
 
 #include <fix8/f8fiber.hpp>
 
-using namespace FIX8;
 //-----------------------------------------------------------------------------------------
+using namespace FIX8;
+
 //-----------------------------------------------------------------------------------------
 class foo
 {
