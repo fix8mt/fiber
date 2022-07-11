@@ -84,7 +84,7 @@ int main(int argc, char *argv[])
 ### Output
 ```bash
 % ./f8fibertest3
-f0 id:0x7f57bac36f50
+fiber id:0x7f57bac36f50
 flags=false
 main:0
 func:entry
