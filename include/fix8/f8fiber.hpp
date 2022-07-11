@@ -30,8 +30,8 @@
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
-#ifndef FIX8PRO_FIBER_HPP_
-#define FIX8PRO_FIBER_HPP_
+#ifndef FIX8_FIBER_HPP_
+#define FIX8_FIBER_HPP_
 
 #include <utility>
 #include <functional>
@@ -288,5 +288,5 @@ inline void swap(f8_fiber& l, f8_fiber& r) noexcept { l.swap(r); }
 //-----------------------------------------------------------------------------------------
 } // namespace FIX8
 
-#endif // FIX8PRO_FIBER_HPP_
+#endif // FIX8_FIBER_HPP_
 
