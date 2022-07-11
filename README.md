@@ -3,14 +3,15 @@
 </p>
 
 # f8fiber
-#### C++17 fiber implementation based on modified `boost::fiber`, fcontext / x86_64 / linux only / de-boosted
+### C++17 fiber based on modified `boost::fiber`, fcontext / x86_64 / linux only / de-boosted
 
-## Introduction
-This is a modified and stripped down version of boost::fiber. The main differences are as follows:
+------------------------------------------------------------------------
+
+This is a modified and stripped down version of [boost::fiber](https://www.boost.org/doc/libs/release/libs/fiber/), with the main differences as follows:
 - x86_64 Linux only
 - fcontext inline assembly
 - stack uses mmap
-- no custom allocator, fiber record uses heap
+- no custom allocator support, fiber record uses heap
 - simplified API, rvalue and lvalue resume()
 - supports any callable object
 - _de-boosted_, no boost dependencies
