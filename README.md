@@ -19,6 +19,16 @@ This is a modified and stripped down version of [boost::fiber](https://www.boost
 - minimal static lib, the rest in header
 - fast, lightweight
 
+## To build
+```bash
+git clone git@github.com:fix8mt/f8fiber.git
+cd f8fiber
+mkdir build
+cd build
+cmake ..
+make
+```
+
 ## Example
 ```c++
 #include <iostream>
@@ -71,7 +81,7 @@ int main(int argc, char *argv[])
    return 0;
 }
 ```
-
+### Output
 ```bash
 % ./f8fibertest3
 f0 id:0x7f57bac36f50
