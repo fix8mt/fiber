@@ -22,16 +22,16 @@ public:
 
 	f8_fiber func (f8_fiber&& f, bool& flags)
 	{
-		std::cout << "func:entry" << '\n';
-		std::cout << "caller id:" << f.get_id() << '\n';
+		std::cout << '\t' << "func:entry\n";
+		std::cout << '\t' << "caller id:" << f.get_id() << '\n';
 		for (int kk{}; kk < _cnt; ++kk)
 		{
 			std::cout << '\t' << "func:" << kk << '\n';
 			f.resume(f);
-			std::cout << '\t' << "func:resumed:" << kk << '\n';
+			std::cout << '\t' << "func:" << kk << " (resumed)\n";
 		}
 		flags = true;
-		std::cout << "func:exit\n";
+		std::cout << '\t' << "func:exit\n";
 		return std::move(f);
 	}
 };
@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
 	{
 		std::cout << "main:" << ii << '\n';
 		f0.resume(f0);
-		std::cout << "main:resumed:" << ii << '\n';
+		std::cout << "main:" << ii << " (resumed)\n";
 	}
 	std::cout << "flags=" << std::boolalpha << flags << '\n';
 	std::cout << "main:exit\n";
