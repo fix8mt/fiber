@@ -3,21 +3,21 @@
 </p>
 
 # f8fiber
-### C++17 fiber based on modified `boost::fiber`, fcontext / x86_64 / linux only / de-boosted
+### C++17 fiber based on modified `boost::fiber`, fcontext / x86_64 / Linux only / de-boosted
 
 ------------------------------------------------------------------------
 ## Introduction
 This is a modified and stripped down version of [boost::fiber](https://www.boost.org/doc/libs/release/libs/fiber/), with the main differences as follows:
 - x86_64 Linux only
-- fcontext inline assembly
-- stack uses mmap
-- no custom allocator support, fiber record uses heap
+- fcontext implemented with inline assembly
+- stack uses mmap, control structure allocated on stack (no heap used)
+- no custom allocator support
 - simplified API, rvalue and lvalue resume()
-- supports any callable object
-- _de-boosted_, no boost dependencies
+- supports any callable object (first parameter must be f8_fiber&&)
 - no scheduler, no boost::context
+- _de-boosted_, no boost dependencies
 - minimal static lib, the rest in header
-- fast, lightweight
+- fast, very lightweight
 
 ## To build
 ```bash
@@ -48,16 +48,16 @@ public:
 
    f8_fiber func (f8_fiber&& f, bool& flags)
    {
-      std::cout << '\t' << "func:entry\n";
-      std::cout << '\t' << "caller id:" << f.get_id() << '\n';
+      std::cout << "\tfunc:entry\n";
+      std::cout << "\tcaller id:" << f.get_id() << '\n';
       for (int kk{}; kk < _cnt; ++kk)
       {
-         std::cout << '\t' << "func:" << kk << '\n';
-         f.resume(f);
-         std::cout << '\t' << "func:" << kk << " (resumed)\n";
+         std::cout << "\tfunc:" << kk << '\n';
+         f8_yield(f);
+         std::cout << "\tfunc:" << kk << " (resumed)\n";
       }
       flags = true;
-      std::cout << '\t' << "func:exit\n";
+      std::cout << "\tfunc:exit\n";
       return std::move(f);
    }
 };
@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
    for (int ii{}; f0; ++ii)
    {
       std::cout << "main:" << ii << '\n';
-      f0.resume(f0);
+      f8_yield(f0);
       std::cout << "main:" << ii << " (resumed)\n";
    }
    std::cout << "flags=" << std::boolalpha << flags << '\n';

@@ -22,16 +22,16 @@ public:
 
 	f8_fiber func (f8_fiber&& f, bool& flags)
 	{
-		std::cout << '\t' << "func:entry\n";
-		std::cout << '\t' << "caller id:" << f.get_id() << '\n';
+		std::cout << "\tfunc:entry\n";
+		std::cout << "\tcaller id:" << f.get_id() << '\n';
 		for (int kk{}; kk < _cnt; ++kk)
 		{
-			std::cout << '\t' << "func:" << kk << '\n';
-			f.resume(f);
-			std::cout << '\t' << "func:" << kk << " (resumed)\n";
+			std::cout << "\tfunc:" << kk << '\n';
+			f8_yield(f);
+			std::cout << "\tfunc:" << kk << " (resumed)\n";
 		}
 		flags = true;
-		std::cout << '\t' << "func:exit\n";
+		std::cout << "\tfunc:exit\n";
 		return std::move(f);
 	}
 };
@@ -42,13 +42,14 @@ int main(int argc, char *argv[])
 	bool flags{};
 	foo bar(argc > 1 ? std::stol(argv[1]) : 5);
 	f8_fiber f0(std::bind(&foo::func, &bar, std::placeholders::_1, std::ref(flags)));
+	//f8_fiber f0(&foo::func, &bar, std::placeholders::_1, std::ref(flags));
 	std::cout << "fiber id:" << f0.get_id() << '\n';
 	std::cout << "flags=" << std::boolalpha << flags << '\n';
 
 	for (int ii{}; f0; ++ii)
 	{
 		std::cout << "main:" << ii << '\n';
-		f0.resume(f0);
+		f8_yield(f0);
 		std::cout << "main:" << ii << " (resumed)\n";
 	}
 	std::cout << "flags=" << std::boolalpha << flags << '\n';

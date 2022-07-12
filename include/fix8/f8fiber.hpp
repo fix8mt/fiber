@@ -112,10 +112,8 @@ void fiber_entry(fcontext_transfer_t t) noexcept
 	Rec *rec { static_cast<Rec *>(t.data) };
 	try
 	{
-		// jump back to `create_context()`
-		t = jump_fcontext(t.ctx, nullptr);
-		// start executing
-		t.ctx = rec->run(t.ctx);
+		t = jump_fcontext(t.ctx, nullptr); // jump back to `create_context()`
+		t.ctx = rec->run(t.ctx); // start executing
 	}
 	catch (const forced_unwind& e)
 	{
@@ -140,9 +138,18 @@ fcontext_t create_fiber(Fn&& fn, size_t stacksz)
 {
 	auto sctx { create_fcontext_stack(stacksz) };
 	// reserve space for control structure
-	const fcontext_t fctx { make_fcontext(sctx.sptr, sctx.ssize, &fiber_entry<Rec>) };
+	void *storage { reinterpret_cast<void*>((reinterpret_cast<uintptr_t>(sctx.sptr) - static_cast<uintptr_t>(sizeof(Rec)))
+		& ~static_cast<uintptr_t>(0xff)) };
+	// placment new for control structure on context stack
+	Rec *record { new (storage) Rec { sctx, std::forward<Fn>(fn) } };
+	// 64byte gap between control structure and stack top, should be 16byte aligned
+	void *top { reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(storage) - static_cast<uintptr_t>(64)) };
+	void *bottom { reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(sctx.sptr) - static_cast<uintptr_t>(sctx.ssize)) };
+	// create fast-context
+	const std::size_t size { reinterpret_cast<uintptr_t>(top) - reinterpret_cast<uintptr_t>(bottom) };
+	const fcontext_t fctx { make_fcontext(top, size, &fiber_entry<Rec>) };
 	// transfer control structure to context-stack
-	return jump_fcontext(fctx, new Rec{ sctx, std::forward<Fn>(fn) }).ctx;
+	return jump_fcontext(fctx, record).ctx;
 }
 
 //-----------------------------------------------------------------------------------------
@@ -152,15 +159,15 @@ class f8_fiber_record
 	fcontext_stack_t _stack;
 	typename std::decay<Fn>::type _fn;
 
-	static void destroy(f8_fiber_record *p)
+	static void destroy(f8_fiber_record *p) noexcept
 	{
-		destroy_fcontext_stack(p->_stack);
-		delete p;
+		auto stack { p->_stack };
+		p->~f8_fiber_record();
+		destroy_fcontext_stack(stack);
 	}
 
 public:
-	f8_fiber_record(fcontext_stack_t sctx, Fn&& fn) noexcept :
-		_stack(sctx), _fn(std::forward<Fn>(fn)) {}
+	f8_fiber_record(fcontext_stack_t sctx, Fn&& fn) noexcept : _stack(sctx), _fn(std::forward<Fn>(fn)) {}
 	f8_fiber_record(const f8_fiber_record&) = delete;
 	f8_fiber_record& operator=(const f8_fiber_record&) = delete;
 	~f8_fiber_record() = default;
@@ -190,13 +197,17 @@ class f8_fiber
 public:
 	f8_fiber() noexcept = default;
 
+	/*
+	template<typename Fn, typename... Args, std::enable_if_t<!std::is_bind_expression_v<Fn>,int> = 0>
+	f8_fiber(Fn&& fn, Args&&... args) : f8_fiber(std::bind(std::forward<Fn>(fn), std::forward<Args>(args)...)) {} */
+
 	template<typename Fn>
 	f8_fiber(Fn&& fn, size_t stacksz=0) // 0 selects SIGSTKSZ;
 		: fctx_ { create_fiber<f8_fiber_record<f8_fiber, Fn>>(std::forward<Fn>(fn), stacksz) } {}
 
 	virtual ~f8_fiber()
 	{
-		if (fctx_ != nullptr)
+		if (fctx_)
 			ontop_fcontext(std::exchange(fctx_, nullptr), nullptr, fiber_unwind);
 	}
 
@@ -243,7 +254,7 @@ public:
 	template<typename charT, class traitsT>
 	friend std::basic_ostream<charT, traitsT>& operator<<(std::basic_ostream<charT, traitsT>& os, const f8_fiber& other)
 	{
-		if (other.fctx_ != nullptr)
+		if (other.fctx_)
 			return os << other.fctx_;
 		return os << "{not-a-context}";
 	}
@@ -270,7 +281,7 @@ public:
 		template<typename charT, class traitsT>
 		friend std::basic_ostream<charT, traitsT>& operator<<(std::basic_ostream<charT, traitsT>& os, const id& other)
 		{
-			if (other.impl_ != nullptr)
+			if (other.impl_)
 				return os << other.impl_;
 			return os << "{not-valid}";
 		}
@@ -284,6 +295,8 @@ public:
 };
 
 inline void swap(f8_fiber& l, f8_fiber& r) noexcept { l.swap(r); }
+
+#define f8_yield(f) f8_fiber::resume(f)
 
 //-----------------------------------------------------------------------------------------
 } // namespace FIX8
