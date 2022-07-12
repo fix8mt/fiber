@@ -83,6 +83,7 @@ int main(int argc, char *argv[])
 ```
 ### Output
 ```bash
+% ./f8fibertest3
 fiber id:0x7fdcce843f50
 flags=false
 main:0
