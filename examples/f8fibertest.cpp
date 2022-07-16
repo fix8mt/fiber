@@ -1,12 +1,14 @@
 //-----------------------------------------------------------------------------------------
-// f8_fiber based on boost::fiber, x86_64 / linux only / de-boosted
+// f8_fiber (header only) based on boost::fiber, x86_64 / linux only / de-boosted
 // Modifications Copyright (C) 2022 Fix8 Market Technologies Pty Ltd
+// see https://github.com/fix8mt/f8fiber
 //-----------------------------------------------------------------------------------------
 #include <iostream>
 #include <iomanip>
 #include <thread>
 
 #include <fix8/f8fiber.hpp>
+
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
 
@@ -59,7 +61,7 @@ f8_fiber bar0(f8_fiber&& f)
 int main()
 {
 	Test test;
-	f8_fiber f0 { &bar0, 8 * 1024 * 1024 };
+	f8_fiber f0 { &bar0 };
 	f8_fiber f1 { std::bind(&Test::foo, &test, std::placeholders::_1, 4) };
 	f8_fiber f2 { std::bind(&bar1, std::placeholders::_1, 12) };
 	f8_fiber f3 { std::bind([](f8_fiber&& f, int i)
