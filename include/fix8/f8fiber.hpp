@@ -159,12 +159,11 @@ extern "C"
 
 //-----------------------------------------------------------------------------------------
 #if !defined F8FIBER_USE_ASM_SOURCE // default not defined
-// fcontext_transfer_t jump_fcontext(const fcontext_t to, void *vp);
 // note: .weak symbol - if multiple definitions only one symbol will be used
 asm(R"(.text
-.type jump_fcontext,@function
-.weak jump_fcontext
+.weak jump_fcontext,make_fcontext,ontop_fcontext
 .align 16
+.type jump_fcontext,@function
 jump_fcontext:
 	leaq  -0x38(%rsp), %rsp
 	stmxcsr  (%rsp)
@@ -191,15 +190,7 @@ jump_fcontext:
 	movq  %rax,%rdi
 	jmp  *%r8
 .size jump_fcontext,.-jump_fcontext
-.section .note.GNU-stack,"",%progbits
-)");
-
-// fcontext_t make_fcontext(void *sp, size_t size, void (*fn)(fcontext_transfer_t));
-// note: .weak symbol - if multiple definitions only one symbol will be used
-asm(R"(.text
-.weak make_fcontext
 .type make_fcontext,@function
-.align 16
 make_fcontext:
 	movq  %rdi,%rax
 	andq  $-16,%rax
@@ -220,15 +211,7 @@ finish:
 	call  _exit@PLT
 	hlt
 .size make_fcontext,.-make_fcontext
-.section .note.GNU-stack,"",%progbits
-)");
-
-// fcontext_transfer_t ontop_fcontext(const fcontext_t to, void *vp, fcontext_transfer_t (*fn)(fcontext_transfer_t));
-// note: .weak symbol - if multiple definitions only one symbol will be used
-asm(R"(.text
-.weak ontop_fcontext
 .type ontop_fcontext,@function
-.align 16
 ontop_fcontext:
 	movq  %rdx,%r8
 	leaq  -0x38(%rsp),%rsp
