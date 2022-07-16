@@ -3,20 +3,20 @@
 </p>
 
 # f8fiber
-### C++17 fiber based on modified `boost::fiber`, fcontext / x86_64 / Linux only / de-boosted
+### C++17 fiber based on modified `boost::fiber`, header-only / fcontext / x86_64 / Linux only / de-boosted
 
 ------------------------------------------------------------------------
 ## Introduction
 This is a modified and stripped down version of [boost::fiber](https://www.boost.org/doc/libs/release/libs/fiber/), with the main differences as follows:
 - x86_64 Linux only
+- _header-only_
 - fcontext implemented with inline assembly
-- stack uses mmap, control structure allocated on stack (no heap used)
-- no custom allocator support
+- default stack uses mmap, control structure allocated on stack; heap stack available
+- custom allocator support, default protected stack
 - simplified API, rvalue and lvalue resume()
-- supports any callable object (first parameter must be f8_fiber&&)
+- supports any callable object (first parameter must be `f8_fiber&&`)
 - no scheduler, no boost::context
 - _de-boosted_, no boost dependencies
-- minimal static lib, the rest in header
 - fast, very lightweight
 
 ## To build
@@ -28,6 +28,16 @@ cd build
 cmake ..
 make
 ```
+
+## Options
+By default, the header-only include will declare and define the *fcontext assembly functions*. These are marked as _weak_ symbols meaning they can
+be defined in multiple compilation units safely (only one will be actually linked). An alternative is to declare the following:
+
+```
+#define F8FIBER_USE_ASM_SOURCE
+F8FIBER_ASM_SOURCE
+```
+after including `f8fiber.hpp` in your source file. This will define the fcontext assembly functions in your source file instead.
 
 ## Example
 ```c++
@@ -83,7 +93,7 @@ int main(int argc, char *argv[])
 ```
 ### Output
 ```bash
-% ./f8fibertest3
+% ./f8fibertest1
 fiber id:0x7fdcce843f50
 flags=false
 main:0
