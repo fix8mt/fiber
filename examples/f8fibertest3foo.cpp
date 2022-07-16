@@ -15,23 +15,18 @@
 using namespace FIX8;
 
 //-----------------------------------------------------------------------------------------
-int main(int argc, char *argv[])
+f8_fiber foo::func (f8_fiber&& f, bool& flags)
 {
-	bool flags{};
-	foo bar(argc > 1 ? std::stol(argv[1]) : 5);
-	f8_fiber f0(std::bind(&foo::func, &bar, std::placeholders::_1, std::ref(flags)));
-	//f8_fiber f0(&foo::func, &bar, std::placeholders::_1, std::ref(flags));
-	std::cout << "fiber id:" << f0.get_id() << '\n';
-	std::cout << "flags=" << std::boolalpha << flags << '\n';
-
-	for (int ii{}; f0; ++ii)
+	std::cout << "\tfunc:entry\n";
+	std::cout << "\tcaller id:" << f.get_id() << '\n';
+	for (int kk{}; kk < _cnt; ++kk)
 	{
-		std::cout << "main:" << ii << '\n';
-		f8_yield(f0);
-		std::cout << "main:" << ii << " (resumed)\n";
+		std::cout << "\tfunc:" << kk << '\n';
+		f8_yield(f);
+		std::cout << "\tfunc:" << kk << " (resumed)\n";
 	}
-	std::cout << "flags=" << std::boolalpha << flags << '\n';
-	std::cout << "main:exit\n";
-	return 0;
+	flags = true;
+	std::cout << "\tfunc:exit\n";
+	return std::move(f);
 }
 
