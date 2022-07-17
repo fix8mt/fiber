@@ -241,98 +241,89 @@ ontop_fcontext:
 .section .note.GNU-stack,"",%progbits
 )");
 
-#else // F8FIBER_USE_ASM_SOURCE, define in your source compilation unit then declare F8FIBER_INCLUDE_ASM_SOURCE
+#else // F8FIBER_USE_ASM_SOURCE, define in your source compilation unit before including this file and then declare F8FIBER_ASM_SOURCE
 
 /// The following macro(;) must appear in one compilation unit (not a header)
-#define F8FIBER_ASM_SOURCE							\
-asm( 														\
-".text\n" 												\
-".globl jump_fcontext\n"							\
-".type jump_fcontext,@function\n" 				\
-".align 16\n" 											\
-"jump_fcontext:\n" 									\
-"	leaq  -0x38(%rsp), %rsp\n" 					\
-"	stmxcsr  (%rsp)\n" 								\
-"	fnstcw   0x4(%rsp)\n" 							\
-"	movq  %r12,0x8(%rsp)\n" 						\
-"	movq  %r13,0x10(%rsp)\n" 						\
-"	movq  %r14,0x18(%rsp)\n" 						\
-"	movq  %r15,0x20(%rsp)\n" 						\
-"	movq  %rbx,0x28(%rsp)\n" 						\
-"	movq  %rbp,0x30(%rsp)\n" 						\
-"	movq  %rsp,%rax\n" 								\
-"	movq  %rdi,%rsp\n" 								\
-"	movq  0x38(%rsp),%r8\n" 						\
-"	ldmxcsr (%rsp)\n" 								\
-"	fldcw   0x4(%rsp)\n" 							\
-"	movq  0x8(%rsp),%r12\n" 						\
-"	movq  0x10(%rsp),%r13\n" 						\
-"	movq  0x18(%rsp),%r14\n" 						\
-"	movq  0x20(%rsp),%r15\n" 						\
-"	movq  0x28(%rsp),%rbx\n" 						\
-"	movq  0x30(%rsp),%rbp\n" 						\
-"	leaq  0x40(%rsp),%rsp\n" 						\
-"	movq  %rsi,%rdx\n" 								\
-"	movq  %rax,%rdi\n" 								\
-"	jmp  *%r8\n" 										\
-".size jump_fcontext,.-jump_fcontext\n" 		\
-".section .note.GNU-stack,\"\",%progbits\n" 	\
-".text\n" 												\
-".globl make_fcontext\n" 							\
-".type make_fcontext,@function\n" 				\
-".align 16\n" 											\
-"make_fcontext:\n" 									\
-"	movq  %rdi,%rax\n" 								\
-"	andq  $-16,%rax\n" 								\
-"	leaq  -0x40(%rax),%rax\n" 						\
-"	movq  %rdx,0x28(%rax)\n" 						\
-"	stmxcsr (%rax)\n" 								\
-"	fnstcw  0x4(%rax)\n" 							\
-"	leaq  trampoline(%rip),%rcx\n" 				\
-"	movq  %rcx,0x38(%rax)\n" 						\
-"	leaq  finish(%rip),%rcx\n" 					\
-"	movq  %rcx,0x30(%rax)\n" 						\
-"	ret\n" 												\
-"trampoline:\n" 										\
-"	push %rbp\n" 										\
-"	jmp *%rbx\n" 										\
-"finish:\n" 											\
-"	xorq  %rdi,%rdi\n" 								\
-"	call  _exit@PLT\n" 								\
-"	hlt\n" 												\
-".size make_fcontext,.-make_fcontext\n	"	 	\
-".section .note.GNU-stack,\"\",%progbits\n" 	\
-".text\n" 												\
-".globl ontop_fcontext\n" 							\
-".type ontop_fcontext,@function\n" 				\
-".align 16\n" 											\
-"ontop_fcontext:\n" 									\
-"	movq  %rdx,%r8\n" 								\
-"	leaq  -0x38(%rsp),%rsp\n" 						\
-"	stmxcsr (%rsp)\n" 								\
-"	fnstcw  0x4(%rsp)\n" 							\
-"	movq  %r12,0x8(%rsp)\n" 						\
-"	movq  %r13,0x10(%rsp)\n" 						\
-"	movq  %r14,0x18(%rsp)\n" 						\
-"	movq  %r15,0x20(%rsp)\n" 						\
-"	movq  %rbx,0x28(%rsp)\n" 						\
-"	movq  %rbp,0x30(%rsp)\n" 						\
-"	movq  %rsp,%rax\n" 								\
-"	movq  %rdi,%rsp\n" 								\
-"	ldmxcsr (%rsp)\n" 								\
-"	fldcw   0x4(%rsp)\n" 							\
-"	movq  0x8(%rsp),%r12\n" 						\
-"	movq  0x10(%rsp),%r13\n" 						\
-"	movq  0x18(%rsp),%r14\n" 						\
-"	movq  0x20(%rsp),%r15\n" 						\
-"	movq  0x28(%rsp),%rbx\n" 						\
-"	movq  0x30(%rsp),%rbp\n" 						\
-"	leaq  0x38(%rsp),%rsp\n" 						\
-"	movq  %rsi,%rdx\n" 								\
-"	movq  %rax,%rdi\n" 								\
-"	jmp  *%r8\n" 										\
-".size ontop_fcontext,.-ontop_fcontext\n" 	\
-".section .note.GNU-stack,\"\",%progbits\n" 	\
+#define F8FIBER_ASM_SOURCE										\
+asm(".text\n" 														\
+".globl jump_fcontext,make_fcontext,ontop_fcontext\n"	\
+".align 16\n" 														\
+".type jump_fcontext,@function\n" 							\
+"jump_fcontext:\n" 												\
+"	leaq  -0x38(%rsp), %rsp\n" 								\
+"	stmxcsr  (%rsp)\n" 											\
+"	fnstcw   0x4(%rsp)\n" 										\
+"	movq  %r12,0x8(%rsp)\n" 									\
+"	movq  %r13,0x10(%rsp)\n" 									\
+"	movq  %r14,0x18(%rsp)\n" 									\
+"	movq  %r15,0x20(%rsp)\n" 									\
+"	movq  %rbx,0x28(%rsp)\n" 									\
+"	movq  %rbp,0x30(%rsp)\n" 									\
+"	movq  %rsp,%rax\n" 											\
+"	movq  %rdi,%rsp\n" 											\
+"	movq  0x38(%rsp),%r8\n" 									\
+"	ldmxcsr (%rsp)\n" 											\
+"	fldcw   0x4(%rsp)\n" 										\
+"	movq  0x8(%rsp),%r12\n" 									\
+"	movq  0x10(%rsp),%r13\n" 									\
+"	movq  0x18(%rsp),%r14\n" 									\
+"	movq  0x20(%rsp),%r15\n" 									\
+"	movq  0x28(%rsp),%rbx\n" 									\
+"	movq  0x30(%rsp),%rbp\n" 									\
+"	leaq  0x40(%rsp),%rsp\n" 									\
+"	movq  %rsi,%rdx\n" 											\
+"	movq  %rax,%rdi\n" 											\
+"	jmp  *%r8\n" 													\
+".size jump_fcontext,.-jump_fcontext\n" 					\
+".type make_fcontext,@function\n" 							\
+"make_fcontext:\n" 												\
+"	movq  %rdi,%rax\n" 											\
+"	andq  $-16,%rax\n" 											\
+"	leaq  -0x40(%rax),%rax\n" 									\
+"	movq  %rdx,0x28(%rax)\n" 									\
+"	stmxcsr (%rax)\n" 											\
+"	fnstcw  0x4(%rax)\n" 										\
+"	leaq  trampoline(%rip),%rcx\n" 							\
+"	movq  %rcx,0x38(%rax)\n" 									\
+"	leaq  finish(%rip),%rcx\n" 								\
+"	movq  %rcx,0x30(%rax)\n" 									\
+"	ret\n" 															\
+"trampoline:\n" 													\
+"	push %rbp\n" 													\
+"	jmp *%rbx\n" 													\
+"finish:\n" 														\
+"	xorq  %rdi,%rdi\n" 											\
+"	call  _exit@PLT\n" 											\
+"	hlt\n" 															\
+".size make_fcontext,.-make_fcontext\n	"	 				\
+".type ontop_fcontext,@function\n" 							\
+"ontop_fcontext:\n" 												\
+"	movq  %rdx,%r8\n" 											\
+"	leaq  -0x38(%rsp),%rsp\n" 									\
+"	stmxcsr (%rsp)\n" 											\
+"	fnstcw  0x4(%rsp)\n" 										\
+"	movq  %r12,0x8(%rsp)\n" 									\
+"	movq  %r13,0x10(%rsp)\n" 									\
+"	movq  %r14,0x18(%rsp)\n" 									\
+"	movq  %r15,0x20(%rsp)\n" 									\
+"	movq  %rbx,0x28(%rsp)\n" 									\
+"	movq  %rbp,0x30(%rsp)\n" 									\
+"	movq  %rsp,%rax\n" 											\
+"	movq  %rdi,%rsp\n" 											\
+"	ldmxcsr (%rsp)\n" 											\
+"	fldcw   0x4(%rsp)\n" 										\
+"	movq  0x8(%rsp),%r12\n" 									\
+"	movq  0x10(%rsp),%r13\n" 									\
+"	movq  0x18(%rsp),%r14\n" 									\
+"	movq  0x20(%rsp),%r15\n" 									\
+"	movq  0x28(%rsp),%rbx\n" 									\
+"	movq  0x30(%rsp),%rbp\n" 									\
+"	leaq  0x38(%rsp),%rsp\n" 									\
+"	movq  %rsi,%rdx\n" 											\
+"	movq  %rax,%rdi\n" 											\
+"	jmp  *%r8\n" 													\
+".size ontop_fcontext,.-ontop_fcontext\n" 				\
+".section .note.GNU-stack,\"\",%progbits\n" 				\
 )
 
 #endif // F8FIBER_USE_ASM_SOURCE
