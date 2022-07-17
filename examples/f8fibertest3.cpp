@@ -8,8 +8,11 @@
 #include <thread>
 #include <string>
 
+//#define F8FIBER_USE_ASM_SOURCE
 #include <fix8/f8fiber.hpp>
 #include "f8fibertest3.hpp"
+
+//F8FIBER_ASM_SOURCE;
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
@@ -20,7 +23,6 @@ int main(int argc, char *argv[])
 	bool flags{};
 	foo bar(argc > 1 ? std::stol(argv[1]) : 5);
 	f8_fiber f0(std::bind(&foo::func, &bar, std::placeholders::_1, std::ref(flags)));
-	//f8_fiber f0(&foo::func, &bar, std::placeholders::_1, std::ref(flags));
 	std::cout << "fiber id:" << f0.get_id() << '\n';
 	std::cout << "flags=" << std::boolalpha << flags << '\n';
 
