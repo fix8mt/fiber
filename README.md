@@ -35,9 +35,12 @@ be defined in multiple compilation units safely (only one will be actually linke
 
 ```
 #define F8FIBER_USE_ASM_SOURCE
+```
+before including `f8fiber.hpp` in your source file, and then declare
+```
 F8FIBER_ASM_SOURCE
 ```
-after including `f8fiber.hpp` in your source file. This will define the fcontext assembly functions in your source file instead.
+This will define the fcontext assembly functions in your source file instead.
 
 ## Example
 ```c++
