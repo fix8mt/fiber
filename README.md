@@ -14,7 +14,7 @@ This is a modified and stripped down version of [boost::fiber](https://www.boost
 - default stack uses mmap, control structure allocated on stack; heap stack available
 - custom allocator support, default protected stack
 - simplified API, rvalue and lvalue resume()
-- supports any callable object (first parameter must be `f8_fiber&&`)
+- supports any callable object with first parameter `f8_fiber&&` and returning `f8_fiber`
 - no scheduler, no boost::context
 - _de-boosted_, no boost dependencies
 - fast, very lightweight
@@ -31,7 +31,9 @@ make
 
 ## Options
 By default, the header-only include will declare and define the *fcontext assembly functions*. These are marked as _weak_ symbols meaning they can
-be defined in multiple compilation units safely (only one will be actually linked). An alternative is to declare the following:
+be defined in multiple compilation units safely (only one will be actually linked). 
+
+An alternative to the above is to declare the following:
 
 ```
 #define F8FIBER_USE_ASM_SOURCE
