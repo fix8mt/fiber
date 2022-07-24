@@ -3,7 +3,7 @@
 </p>
 
 # f8fiber
-### C++17 fiber based on modified `boost::fiber`, header-only / fcontext / x86_64 / Linux only / de-boosted
+### C++17 fiber based on modified `boost::fiber`, header-only / fcontext / x86_64 / Linux only / de-boosted / stackful
 
 ------------------------------------------------------------------------
 ## Introduction
