@@ -9,11 +9,16 @@
 ## Introduction
 This is a modified and stripped down version of [boost::fiber](https://www.boost.org/doc/libs/release/libs/fiber/), with the main differences as follows:
 - x86_64 Linux only
-- _header-only_
+- single _header-only_
+- thread safe cleanup - fiber can be removed without needing it to 'return'
+- fiber stack will be released when fiber goes out of scope; can be enabled or disabled
 - fcontext implemented with inline assembly
+- std::bind can be omitted with args forwarded by ctor
 - default stack uses mmap, control structure allocated on stack; heap stack available
 - custom allocator support, default protected stack
+- exception safe - all exceptions can be captured by a std::exception_ptr within the fiber, and can be rethrown by the caller
 - simplified API, rvalue and lvalue resume()
+- f8_fiber_manager printer
 - supports any callable object (first parameter must be `f8_fiber&&`)
 - no scheduler, no boost::context
 - _de-boosted_, no boost dependencies
@@ -29,7 +34,7 @@ cmake ..
 make
 ```
 
-## Options
+## Build Options
 By default, the header-only include will declare and define the *fcontext assembly functions*. These are marked as _weak_ symbols meaning they can
 be defined in multiple compilation units safely (only one will be actually linked). An alternative is to declare the following:
 
@@ -41,6 +46,50 @@ before including `f8fiber.hpp` in your source file, and then declare
 F8FIBER_ASM_SOURCE
 ```
 This will define the fcontext assembly functions in your source file instead.
+
+## Runtime Options
+### Fiber Manager
+By default, f8_fiber_manager maintains a map of fiber handles and their associated resource object. This is used to cleanup the object
+when it either goes out of scope of if explictly called. To disable this behavour, call:
+
+```
+	f8_fiber_manager::disable();
+```
+before you create any fibers.
+
+### Exceptions
+Any exceptions caught within a fiber should be assigned to a std::exception pointer using std::current_exception. The calling function should then rethrow using
+std::rethrow_exception, as in the following example:
+
+```
+std::exception_ptr _eptr;
+
+// in my_fiber
+try
+{
+	.
+	.
+	.
+}
+catch (...)
+{
+	_eptr = std::current_exception();
+}
+.
+.
+.
+// in caller
+try
+{
+	f8_yield(my_fiber);
+	if (_eptr)
+		std::rethrow_exception(std::exchange(_eptr, nullptr));
+}
+catch (const std::exception& e)
+{
+	std::cout << e.what() << '\n';
+}
+```
 
 ## Example
 ```c++

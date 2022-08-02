@@ -27,12 +27,15 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 # ----------------------------------------------------------------------------------------
-cmake_minimum_required (VERSION 3.1)
+cmake_minimum_required (VERSION 3.8)
 enable_language(CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-include_directories("$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
+include_directories(${CMAKE_SOURCE_DIR}/include)
 project (f8fiber VERSION 1.2)
-set(eg "${CMAKE_SOURCE_DIR}/examples")
-add_executable(f8fibertest ${eg}/f8fibertest.cpp)
-add_executable(f8fibertest3 ${eg}/f8fibertest3.cpp ${eg}/f8fibertest3foo.cpp)
+set(eg ${CMAKE_SOURCE_DIR}/examples)
+list(APPEND Src f8fibertest f8fibertest2 f8fibertest3 f8fibertest4 f8fibertest5 f8fibertest6 f8fibertest7)
+foreach(x IN LISTS Src)
+	add_executable(${x} ${eg}/${x}.cpp)
+endforeach()
+target_sources(f8fibertest3 PUBLIC ${eg}/f8fibertest3foo.cpp)
