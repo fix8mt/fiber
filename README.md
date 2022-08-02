@@ -96,6 +96,24 @@ catch (const std::exception& e)
    std::cout << e.what() << '\n';
 }
 ```
+### Printer
+You can print a list of f8_fibers that are currently known in the global f8_fiber_manager object. The printer will print the f8_fiber_id, the raw pointer to the resource object and a pointer to the typing object:
+```c++
+.
+.
+.
+f8_fiber_manager::print(std::cout);
+.
+.
+.
+```
+Will produce something like this:
+```
+0x7f46a6a94df0 (0x7f46a6a94f00,0x555b69e2ad60)
+0x7f46a6ab5df0 (0x7f46a6ab5f00,0x555b69e2ad60)
+0x7f46a703cdf0 (0x7f46a703cf00,0x555b69e2adc0)
+```
+
 
 ## Example
 ```c++
