@@ -52,28 +52,34 @@ This will define the fcontext assembly functions in your source file instead.
 By default, f8_fiber_manager maintains a map of fiber handles and their associated resource object. This is used to cleanup the object
 when it either goes out of scope of if explictly called. To disable this behavour, call:
 
-```
-	f8_fiber_manager::disable();
+```c++
+f8_fiber_manager::disable();
 ```
 before you create any fibers.
+
+### Remove f8_fiber
+By default, fiber resources will be released when a fiber goes out of scope. You can force a fiber to be released by calling the method remove:
+```c++
+my_fiber.remove();
+```
 
 ### Exceptions
 Any exceptions caught within a fiber should be assigned to a std::exception pointer using std::current_exception. The calling function should then rethrow using
 std::rethrow_exception, as in the following example:
 
-```
+```c++
 std::exception_ptr _eptr;
 
 // in my_fiber
 try
 {
-	.
-	.
-	.
+   .
+   .
+   .
 }
 catch (...)
 {
-	_eptr = std::current_exception();
+   _eptr = std::current_exception();
 }
 .
 .
@@ -81,13 +87,13 @@ catch (...)
 // in caller
 try
 {
-	f8_yield(my_fiber);
-	if (_eptr)
-		std::rethrow_exception(std::exchange(_eptr, nullptr));
+   f8_yield(my_fiber);
+   if (_eptr)
+      std::rethrow_exception(std::exchange(_eptr, nullptr));
 }
 catch (const std::exception& e)
 {
-	std::cout << e.what() << '\n';
+   std::cout << e.what() << '\n';
 }
 ```
 
