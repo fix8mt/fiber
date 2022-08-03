@@ -16,7 +16,7 @@ This is a modified and stripped down version of [boost::fiber](https://www.boost
 - std::bind can be omitted with args forwarded by ctor
 - default stack uses mmap, control structure allocated on stack; heap stack available
 - custom allocator support, default protected stack
-- exception safe - all exceptions can be captured by a std::exception_ptr within the fiber, and can be rethrown by the caller
+- exception safe - all exceptions can be captured by a `std::exception_ptr` within the fiber, and can be rethrown by the caller
 - simplified API, rvalue and lvalue resume()
 - f8_fiber_manager printer
 - supports any callable object with first parameter `f8_fiber&&` and returning `f8_fiber`
@@ -51,7 +51,7 @@ This will define the fcontext assembly functions in your source file instead.
 
 ## Runtime Options
 ### Fiber Manager
-By default, f8_fiber_manager maintains a map of fiber handles and their associated resource object. This is used to cleanup the object
+By default, `f8_fiber_manager` maintains a map of fiber handles and their associated resource object. This is used to cleanup the object
 when it either goes out of scope or if explictly called. To disable this behavour, call:
 
 ```c++
@@ -66,8 +66,8 @@ my_fiber.remove();
 ```
 
 ### Exceptions
-Any exceptions caught within a fiber should be assigned to a std::exception pointer using std::current_exception. The calling function should then rethrow using
-std::rethrow_exception, as in the following example:
+Any exceptions caught within a fiber should be assigned to a `std::exception_ptr` using `std::current_exception`. The calling function should then rethrow using
+`std::rethrow_exception`, as in the following example:
 
 ```c++
 std::exception_ptr _eptr;
@@ -99,7 +99,7 @@ catch (const std::exception& e)
 }
 ```
 ### Printer
-You can print a list of f8_fibers that are currently known in the global f8_fiber_manager object. The printer will print the f8_fiber_id, the raw pointer to the resource object and a pointer to the typing object:
+You can print a list of f8_fibers that are currently known in the global `f8_fiber_manager` object. The printer will print the `f8_fiber_id`, the raw pointer to the resource object and a pointer to the typing object:
 ```c++
 .
 .
