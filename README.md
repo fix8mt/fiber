@@ -52,7 +52,7 @@ This will define the fcontext assembly functions in your source file instead.
 ## Runtime Options
 ### Fiber Manager
 By default, f8_fiber_manager maintains a map of fiber handles and their associated resource object. This is used to cleanup the object
-when it either goes out of scope of if explictly called. To disable this behavour, call:
+when it either goes out of scope or if explictly called. To disable this behavour, call:
 
 ```c++
 f8_fiber_manager::disable();
