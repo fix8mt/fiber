@@ -284,13 +284,13 @@ protected:
 };
 #endif
 
-#if !defined f8_nonconstructable
+#if !defined f8_nonconstructible
 /// simple non-constructable base
-class f8_nonconstructable : protected f8_noncopyable
+class f8_nonconstructible : protected f8_noncopyable
 {
 protected:
-	f8_nonconstructable() = delete;
-	~f8_nonconstructable() = delete;
+	f8_nonconstructible() = delete;
+	~f8_nonconstructible() = delete;
 };
 #endif
 
@@ -313,7 +313,7 @@ public:
 //-----------------------------------------------------------------------------------------
 #if defined __GNUG__ && !defined demangler
 #include <cxxabi.h>
-struct demangler : protected f8_nonconstructable
+struct demangler : protected f8_nonconstructible
 {
 	static std::string demangle(const char *name)
 	{
@@ -431,13 +431,13 @@ public:
 };
 
 //-----------------------------------------------------------------------------------------
-class f8_fiber_manager : protected f8_nonconstructable
+class f8_fiber_manager : protected f8_nonconstructible
 {
 	template<typename T, typename... args> struct PassTypes {};
 
-	class f8_rec_inst
+	struct f8_rec_inst
 	{
-		void (*_dealloc)(void *);
+		void (*dealloc)(void *);
 
 		template<typename Rec>
 		constexpr f8_rec_inst(PassTypes<Rec>) noexcept
@@ -510,6 +510,7 @@ public:
 	template<typename charT, class traitsT>
 	static void print (std::basic_ostream<charT, traitsT>& os)
 	{
+		fiber_map fb;
 		auto& [mp, lok, act] { get_vars() };
 		{
 			std::lock_guard<f8_spin_lock> lk(lok);
@@ -554,14 +555,14 @@ void fiber_entry(fcontext_transfer_t t) noexcept
 	Rec *rec { static_cast<Rec *>(t.data) };
 	try
 	{
-		t = jump_fcontext(t.ctx, nullptr); // jump back to `create_context()`
+		t = jump_fcontext(t.ctx, nullptr); // jump back to 'create_context()'
 		t.ctx = rec->run(t.ctx); // start executing
 	}
 	catch (const forced_unwind& e)
 	{
 		t = { e.fctx, nullptr };
 	}
-	// destroy context-stack of `this`context on next context
+	// destroy context-stack of 'this' context on next context
 	ontop_fcontext(t.ctx, rec, fiber_exit<Rec>);
 }
 
@@ -680,11 +681,8 @@ public:
 
 	virtual ~f8_fiber()
 	{
-		if (fctx_)
-		{
-			if (!remove())
-				ontop_fcontext(std::exchange(fctx_, nullptr), nullptr, fiber_unwind);
-		}
+		if (fctx_ && !remove())
+			ontop_fcontext(std::exchange(fctx_, nullptr), nullptr, fiber_unwind);
 	}
 
 	/*! Remove fiber stack, clear fiber id and render inoperable
