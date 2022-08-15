@@ -440,14 +440,9 @@ class f8_fiber_manager : protected f8_nonconstructable
 		void (*_dealloc)(void *);
 
 		template<typename Rec>
-		static constexpr void _make_dealloc(void *what) noexcept { static_cast<Rec*>(what)->deallocate(); }
-
-	public:
-		template<typename Rec>
-		constexpr f8_rec_inst(PassTypes<Rec>) noexcept : _dealloc(_make_dealloc<Rec>) {}
-
-		constexpr void dealloc(void *what) noexcept { _dealloc(what); }
-		friend class f8_fiber_manager;
+		constexpr f8_rec_inst(PassTypes<Rec>) noexcept
+			: dealloc([](void *what) noexcept { static_cast<Rec*>(what)->deallocate(); }) {}
+		f8_rec_inst() = delete;
 	};
 
 	using fiber_map = std::map<class f8_fiber_id, std::pair<void *, f8_rec_inst>>;
@@ -516,9 +511,12 @@ public:
 	static void print (std::basic_ostream<charT, traitsT>& os)
 	{
 		auto& [mp, lok, act] { get_vars() };
-		std::lock_guard<f8_spin_lock> lk(lok);
-		for (const auto& pp : mp)
-			os << pp.first << " (" << pp.second.first << ',' << (void*&)pp.second.second._dealloc << ")\n";
+		{
+			std::lock_guard<f8_spin_lock> lk(lok);
+			fb = mp;
+		}
+		for (const auto& pp : fb)
+			os << pp.first << " (" << pp.second.first << ',' << reinterpret_cast<const void* const&>(pp.second.second.dealloc) << ")\n";
 	}
 };
 
