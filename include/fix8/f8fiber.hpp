@@ -387,7 +387,7 @@ class f8_fixedsize_heap_stack
 public:
 	f8_fixedsize_heap_stack(std::size_t size=SIGSTKSZ) noexcept : size_(size) {}
 
-	fcontext_stack_t allocate() { return { static_cast<char *>(::operator new(size_)) + size_, size_ }; }
+	fcontext_stack_t allocate() { std::cout << size_ << '\n'; return { static_cast<char *>(::operator new(size_)) + size_, size_ }; }
 
 	void deallocate(fcontext_stack_t& sctx) noexcept
 	{
@@ -646,17 +646,17 @@ public:
 	f8_fiber() noexcept = default;
 
 	/*! Ctor with arguments passed to std::bind; this allows you to simply pass
-	  the bind arguments directly without needed to call bind yourself
+	  the bind arguments directly without needing to call bind yourself
 	 \tparam Fn function type or method to invoke
     \tparam Args to pass to method (via bind)
 	 \param fn function
     \param args to pass */
 	template<typename Fn, typename... Args, std::enable_if_t<!std::is_bind_expression_v<Fn>,int> = 0>
 	f8_fiber(Fn&& fn, Args&&... args) :
-		f8_fiber(std::allocator_arg, f8_protected_fixedsize_stack(), std::bind(std::forward<Fn>(fn), std::forward<Args>(args)...)) {}
+		f8_fiber { std::allocator_arg, f8_protected_fixedsize_stack(), std::bind(std::forward<Fn>(fn), std::forward<Args>(args)...) } {}
 
 	/*! Ctor with custom allocator and arguments passed to std::bind; this allows you to simply pass
-	  the bind arguments directly without needed to call bind yourself
+	  the bind arguments directly without needing to call bind yourself
 	 \tparam StackAlloc allocator type
 	 \tparam Fn function type or method to invoke
     \tparam Args to pass to method (via bind)
@@ -666,7 +666,7 @@ public:
     \param args to pass */
 	template<typename StackAlloc, typename Fn, typename... Args, std::enable_if_t<!std::is_bind_expression_v<Fn>,int> = 0>
 	f8_fiber(std::allocator_arg_t, StackAlloc&& salloc, Fn&& fn, Args&&... args) :
-		f8_fiber(std::allocator_arg, std::forward<StackAlloc>(salloc), std::bind(std::forward<Fn>(fn), std::forward<Args>(args)...)) {}
+		f8_fiber { std::allocator_arg, std::forward<StackAlloc>(salloc), std::bind(std::forward<Fn>(fn), std::forward<Args>(args)...) } {}
 
 	/*! Ctor with function argument (usually already bound with arguments)
 	 \tparam Fn function type or method to invoke
@@ -759,7 +759,7 @@ public:
 	}
 
 	/*! Resume given fiber with new function, with function arguments passed to std::bind; this allows you to simply pass
-	  the bind arguments directly without needed to call bind yourself
+	  the bind arguments directly without needing to call bind yourself
 	 \tparam Fn function type or method to invoke
     \tparam Args to pass to method (via bind)
 	 \param what rvalue fiber to resume
