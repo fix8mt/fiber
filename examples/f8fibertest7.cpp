@@ -103,7 +103,7 @@ public:
 		f8_fiber f1(std::allocator_arg, f8_fixedsize_heap_stack(), &Reader::read_msg, this, std::placeholders::_1, std::ref(result));
 		f8_fiber f2(std::allocator_arg, f8_fixedsize_heap_stack(), &Reader::read_msg, this, std::placeholders::_1, std::ref(result)); // not used
 
-		std::cout << "f1: " << f1.get_id() << '\n';
+		std::cout << "f1: " << f1 << "\nf2: " << f2 << '\n';
 		for (int ii{}; ii < _rdcnt && f1; ++ii)
 		{
 			for (bool loop{true}; loop; f8_yield(caller))
@@ -142,11 +142,7 @@ public:
 				}
 			}
 		}
-		std::cout << "exited execute_reader loop\n";
-		f8_fiber_manager::print(std::cout);
-		//f1.remove(); // not needed, will be cleaned up by dtor
-		std::cout << "f1: " << f1.get_id() << '\n';
-		std::cout << "invalid=" << _invalid << " processed=" << _processed << '\n';
+		std::cout << "exited execute_reader loop\ninvalid=" << _invalid << " processed=" << _processed << '\n';
 		return std::move(caller);
 	}
 };
@@ -156,9 +152,8 @@ int main(int argc, char *argv[])
 {
 	std::string msg;
 	Reader reader(msg, argc > 1 ? std::stoi(argv[1]) : 100);
-	//f8_fiber_manager::disable();
 	f8_fiber f0(&Reader::execute_reader, &reader, std::placeholders::_1);
-	std::cout << "f0: " << f0.get_id() << '\n';
+	std::cout << "f0: " << f0 << '\n';
 	int yields{};
 
 	while (f0)
