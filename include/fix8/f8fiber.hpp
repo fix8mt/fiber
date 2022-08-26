@@ -76,7 +76,6 @@ struct fcontext_stack_t
 struct forced_unwind
 {
 	fcontext_t _fctx{};
-	forced_unwind() = default;
 	forced_unwind(fcontext_t fctx) : _fctx(fctx) {}
 };
 
@@ -261,14 +260,24 @@ asm(".text\n" 														\
 
 //-----------------------------------------------------------------------------------------
 /// Anonymous memory mapped region based stack
-class f8_protected_fixedsize_stack
+class f8_stack
 {
+protected:
 	std::size_t _size;
 
 public:
-	f8_protected_fixedsize_stack(std::size_t size=SIGSTKSZ) noexcept : _size(size) {}
+	f8_stack(std::size_t size=SIGSTKSZ) noexcept : _size(size) {}
+	virtual fcontext_stack_t allocate() = 0;
+	virtual void deallocate(fcontext_stack_t& sctx) { sctx = {}; }
+};
 
-	fcontext_stack_t allocate()
+//-----------------------------------------------------------------------------------------
+/// Anonymous memory mapped region based stack
+class f8_protected_fixedsize_stack final : public f8_stack
+{
+public:
+	using f8_stack::f8_stack;
+	fcontext_stack_t allocate() override
 	{
 		static const auto PageSize { static_cast<size_t>(sysconf(_SC_PAGESIZE)) };
 		// calculate how many pages are required
@@ -291,33 +300,39 @@ public:
 		return { static_cast<char *>(vp) + __size, __size };
 	}
 
-	void deallocate(fcontext_stack_t& sctx) noexcept
+	void deallocate(fcontext_stack_t& sctx) noexcept override
 	{
 		if (sctx.sptr)
 		{
 			// conform to POSIX.4 (POSIX.1b-1993, _POSIX_C_SOURCE=199309L)
 			::munmap(static_cast<char *>(sctx.sptr) - sctx.ssize, sctx.ssize);
 		}
-		sctx = {};
+		f8_stack::deallocate(sctx);
 	}
 };
 
 //-----------------------------------------------------------------------------------------
 /// Simple heap based stack
-class f8_fixedsize_heap_stack
+class f8_fixedsize_heap_stack final : public f8_stack
 {
-	std::size_t _size;
-
 public:
-	f8_fixedsize_heap_stack(std::size_t size=SIGSTKSZ) noexcept : _size(size) {}
-
-	fcontext_stack_t allocate() { return { static_cast<char *>(::operator new(_size)) + _size, _size }; }
-
-	void deallocate(fcontext_stack_t& sctx) noexcept
+	using f8_stack::f8_stack;
+	fcontext_stack_t allocate() override { return { static_cast<char *>(::operator new(_size)) + _size, _size }; }
+	void deallocate(fcontext_stack_t& sctx) noexcept override
 	{
 		delete (static_cast<char *>(sctx.sptr) - sctx.ssize);
-		sctx = {};
+		f8_stack::deallocate(sctx);
 	}
+};
+
+//-----------------------------------------------------------------------------------------
+/// Placement stack
+class f8_fixedsize_placement_stack final : public f8_stack
+{
+	char *_ptr;
+public:
+	f8_fixedsize_placement_stack(char *top, std::size_t size=SIGSTKSZ) noexcept : f8_stack(size), _ptr(top) {}
+	fcontext_stack_t allocate() noexcept override { return { _ptr + _size, _size }; }
 };
 
 //-----------------------------------------------------------------------------------------

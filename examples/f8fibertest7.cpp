@@ -99,8 +99,9 @@ public:
 
 	f8_fiber execute_reader (f8_fiber&& caller)
 	{
+		char stack[0x7fff];
 		NonBlockingReadResult result { NonBlockingReadResult::no_full_message_available };
-		f8_fiber f1(std::allocator_arg, f8_fixedsize_heap_stack(), &Reader::read_msg, this, std::placeholders::_1, std::ref(result));
+		f8_fiber f1(std::allocator_arg, f8_fixedsize_placement_stack(stack, 0x7fff), &Reader::read_msg, this, std::placeholders::_1, std::ref(result));
 		f8_fiber f2(std::allocator_arg, f8_fixedsize_heap_stack(), &Reader::read_msg, this, std::placeholders::_1, std::ref(result)); // not used
 
 		std::cout << "f1: " << f1 << "\nf2: " << f2 << '\n';
