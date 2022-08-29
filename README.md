@@ -10,15 +10,14 @@
 This is a modified and stripped down version of [boost::fiber](https://www.boost.org/doc/libs/release/libs/fiber/), with the main differences as follows:
 - x86_64 Linux only
 - single _header-only_
-- thread safe cleanup - fiber can be removed without needing it to 'return'
-- fiber stack will be released when fiber goes out of scope; can be enabled or disabled
-- `fcontext` implemented with inline assembly
-- `std::bind` can be omitted with args forwarded by ctor
-- default stack uses `mmap`, control structure allocated on stack; heap stack available
+- auto cleanup - fiber will be removed when it goes out of scope without needing it to 'return'
+- fcontext implemented with inline assembly
+- std::bind can be omitted with args forwarded by ctor
+- default stack uses mmap, control structure allocated on stack; heap stack available
 - custom allocator support, default protected stack
 - exception safe - all exceptions can be captured by a `std::exception_ptr` within the fiber, and can be rethrown by the caller
 - simplified API, rvalue and lvalue resume()
-- `f8_fiber_manager` printer
+- f8_fiber printer
 - supports any callable object with first parameter `f8_fiber&&` and returning `f8_fiber`
 - no scheduler, no boost::context
 - _de-boosted_, no boost dependencies
@@ -50,20 +49,6 @@ F8FIBER_ASM_SOURCE
 This will define the fcontext assembly functions in your source file instead.
 
 ## Runtime Options
-### Fiber Manager
-By default, `f8_fiber_manager` maintains a map of fiber handles and their associated resource object. This is used to cleanup the object
-when it either goes out of scope or if explictly called. To disable this behavour, call:
-
-```c++
-f8_fiber_manager::disable();
-```
-before you create any fibers.
-
-### Remove f8_fiber
-By default, fiber resources will be released when a fiber goes out of scope. You can force a fiber to be released by calling the method remove:
-```c++
-my_fiber.remove();
-```
 
 ### Exceptions
 Any exceptions caught within a fiber should be assigned to a `std::exception_ptr` using `std::current_exception`. The calling function should then rethrow using
@@ -99,12 +84,12 @@ catch (const std::exception& e)
 }
 ```
 ### Printer
-You can print a list of f8_fibers that are currently known in the global `f8_fiber_manager` object. The printer will print the `f8_fiber_id`, the raw pointer to the resource object and a pointer to the typing object:
+You can print an f8_fiber. The printer will print the f8_fiber_id, the raw pointer to the resource object and a pointer to the typing object:
 ```c++
 .
 .
 .
-f8_fiber_manager::print(std::cout);
+std::cout << my_fiber << endl;
 .
 .
 .
@@ -112,8 +97,6 @@ f8_fiber_manager::print(std::cout);
 Will produce something like this:
 ```
 0x7f46a6a94df0 (0x7f46a6a94f00,0x555b69e2ad60)
-0x7f46a6ab5df0 (0x7f46a6ab5f00,0x555b69e2ad60)
-0x7f46a703cdf0 (0x7f46a703cf00,0x555b69e2adc0)
 ```
 
 

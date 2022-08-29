@@ -40,13 +40,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <cmath>
-#include <map>
 #include <cstddef>
-#include <string>
+#include <tuple>
 #include <new>
-#include <atomic>
-#include <mutex>
 #include <utility>
 #include <functional>
 #include <iostream>
@@ -75,6 +71,12 @@ struct fcontext_stack_t
 {
 	void *sptr;
 	size_t ssize;
+};
+
+struct forced_unwind
+{
+	fcontext_t _fctx{};
+	forced_unwind(fcontext_t fctx) : _fctx(fctx) {}
 };
 
 //-----------------------------------------------------------------------------------------
@@ -257,382 +259,120 @@ asm(".text\n" 														\
 #endif // F8FIBER_USE_ASM_SOURCE
 
 //-----------------------------------------------------------------------------------------
-namespace
-{
-	inline size_t getPageSize()
-	{
-		/* conform to POSIX.1-2001 */
-		static const auto sz { static_cast<size_t>(sysconf(_SC_PAGESIZE)) };
-		return sz;
-	}
-
-}
-
-//-------------------------------------------------------------------------------------------------
-/// simple non-copyable base
-#if !defined f8_noncopyable
-class f8_noncopyable
+/// Anonymous memory mapped region based stack
+class f8_stack
 {
 protected:
-	f8_noncopyable() = default;
-	~f8_noncopyable() = default;
-
-	f8_noncopyable(const f8_noncopyable&) = delete;
-	f8_noncopyable(f8_noncopyable&&) = delete;
-	f8_noncopyable& operator=(const f8_noncopyable&) = delete;
-	f8_noncopyable& operator=(f8_noncopyable&&) = delete;
-};
-#endif
-
-#if !defined f8_nonconstructible
-/// simple non-constructable base
-class f8_nonconstructible : protected f8_noncopyable
-{
-protected:
-	f8_nonconstructible() = delete;
-	~f8_nonconstructible() = delete;
-};
-#endif
-
-//-----------------------------------------------------------------------------------------
-#if !defined f8_spin_lock
-class f8_spin_lock
-{
-	std::atomic_flag _sl = ATOMIC_FLAG_INIT;
+	std::size_t _size;
 
 public:
-	f8_spin_lock() noexcept = default;
-	~f8_spin_lock() noexcept = default;
-
-	void lock() noexcept { while (!try_lock()); }
-	bool try_lock() noexcept { return !_sl.test_and_set(std::memory_order_acquire); }
-	void unlock() noexcept { _sl.clear(std::memory_order_release); }
+	f8_stack(std::size_t size=SIGSTKSZ) noexcept : _size(size) {}
+	virtual fcontext_stack_t allocate() = 0;
+	virtual void deallocate(fcontext_stack_t& sctx) { sctx = {}; }
 };
-#endif
-
-//-----------------------------------------------------------------------------------------
-#if defined __GNUG__ && !defined demangler
-#include <cxxabi.h>
-struct demangler : protected f8_nonconstructible
-{
-	static std::string demangle(const char *name)
-	{
-		using namespace std::string_literals;
-		int status;
-		std::unique_ptr<char, decltype(&free)> eptr(abi::__cxa_demangle(name, nullptr, nullptr, &status), &free);
-		switch (status)
-		{
-		case 0: return std::move(std::string(eptr.get()));
-		case -1: return "memory allocation failiure"s;
-		case -3: return "invalid argument"s;
-		default: break;
-		}
-		return std::move(std::string(name ? name : ""));
-	}
-
-	template<typename T>
-	static constexpr std::string demangle() { return demangle(typeid(T).name()); }
-};
-#endif
 
 //-----------------------------------------------------------------------------------------
 /// Anonymous memory mapped region based stack
-class f8_protected_fixedsize_stack
+class f8_protected_fixedsize_stack final : public f8_stack
 {
-	std::size_t size_;
-
 public:
-	f8_protected_fixedsize_stack(std::size_t size=SIGSTKSZ) noexcept : size_(size) {}
-
-	fcontext_stack_t allocate()
+	using f8_stack::f8_stack;
+	fcontext_stack_t allocate() override
 	{
+		static const auto PageSize { static_cast<size_t>(sysconf(_SC_PAGESIZE)) };
 		// calculate how many pages are required
-		const std::size_t pages = (size_ + getPageSize() - 1) / getPageSize();
+		const std::size_t pages { (_size + PageSize - 1) / PageSize };
 		// add one page at bottom that will be used as guard-page
-		const std::size_t size__ = (pages + 1) * getPageSize();
+		const std::size_t __size { (pages + 1) * PageSize };
 
 #if defined(USE_MAP_STACK)
-		void *vp = ::mmap(0, size__, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | MAP_STACK, -1, 0);
+		void *vp = ::mmap(0, __size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | MAP_STACK, -1, 0);
 #elif defined(MAP_ANON)
-		void *vp = ::mmap(0, size__, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+		void *vp = ::mmap(0, __size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
 #else
-		void *vp = ::mmap(0, size__, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+		void *vp = ::mmap(0, __size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 #endif
 		if (vp == MAP_FAILED)
 			throw std::bad_alloc();
 
 		// conforming to POSIX.1-2001
-		::mprotect(vp, getPageSize(), PROT_NONE);
-		return { static_cast<char *>(vp) + size__, size__ };
+		::mprotect(vp, PageSize, PROT_NONE);
+		return { static_cast<char *>(vp) + __size, __size };
 	}
 
-	void deallocate(fcontext_stack_t& sctx) noexcept
+	void deallocate(fcontext_stack_t& sctx) noexcept override
 	{
 		if (sctx.sptr)
 		{
 			// conform to POSIX.4 (POSIX.1b-1993, _POSIX_C_SOURCE=199309L)
 			::munmap(static_cast<char *>(sctx.sptr) - sctx.ssize, sctx.ssize);
 		}
-		sctx = {};
+		f8_stack::deallocate(sctx);
 	}
 };
 
 //-----------------------------------------------------------------------------------------
 /// Simple heap based stack
-class f8_fixedsize_heap_stack
+class f8_fixedsize_heap_stack final : public f8_stack
 {
-	std::size_t size_;
-
 public:
-	f8_fixedsize_heap_stack(std::size_t size=SIGSTKSZ) noexcept : size_(size) {}
-
-	fcontext_stack_t allocate() { return { static_cast<char *>(::operator new(size_)) + size_, size_ }; }
-
-	void deallocate(fcontext_stack_t& sctx) noexcept
+	using f8_stack::f8_stack;
+	fcontext_stack_t allocate() override { return { static_cast<char *>(::operator new(_size)) + _size, _size }; }
+	void deallocate(fcontext_stack_t& sctx) noexcept override
 	{
 		delete (static_cast<char *>(sctx.sptr) - sctx.ssize);
-		sctx = {};
+		f8_stack::deallocate(sctx);
 	}
 };
 
 //-----------------------------------------------------------------------------------------
-/// unique fiber id
-class f8_fiber_id
+/// Placement stack
+class f8_fixedsize_placement_stack final : public f8_stack
 {
-	const fcontext_t impl_{ nullptr };
-
+	char *_ptr;
 public:
-	f8_fiber_id() = default;
-	explicit f8_fiber_id(const fcontext_t impl) noexcept : impl_{ impl } {}
-
-#if __cplusplus >= 202002L
-	constexpr auto operator<=>(const f8_fiber_id& other) const noexcept { return impl_ <=> other.impl_; }
-#else
-	constexpr bool operator==(const f8_fiber_id& other) const noexcept { return impl_ == other.impl_; }
-	constexpr bool operator!=(const f8_fiber_id& other) const noexcept { return impl_ != other.impl_; }
-	constexpr bool operator<(const f8_fiber_id& other) const noexcept { return impl_ < other.impl_; }
-	constexpr bool operator>(const f8_fiber_id& other) const noexcept { return other.impl_ < impl_; }
-	constexpr bool operator<=(const f8_fiber_id& other) const noexcept { return !(*this > other); }
-	constexpr bool operator>=(const f8_fiber_id& other) const noexcept { return !(*this < other); }
-#endif
-
-	template<typename charT, class traitsT>
-	friend std::basic_ostream<charT, traitsT>& operator<<(std::basic_ostream<charT, traitsT>& os, const f8_fiber_id& what)
-	{
-		if (what.impl_)
-			return os << what.impl_;
-		return os << "{not-valid (nullptr)}";
-	}
-
-	constexpr explicit operator bool() const noexcept { return impl_ != nullptr; }
-	constexpr bool operator! () const noexcept { return impl_ == nullptr; }
-
-	friend class f8_fiber;
-};
-
-//-----------------------------------------------------------------------------------------
-class f8_fiber_manager : protected f8_nonconstructible
-{
-	template<typename T, typename... args> struct PassTypes {};
-
-	struct f8_rec_inst
-	{
-		void (*dealloc)(void *);
-
-		template<typename Rec>
-		constexpr f8_rec_inst(PassTypes<Rec>) noexcept : dealloc([](void *what) noexcept { static_cast<Rec*>(what)->deallocate(); }) {}
-	};
-
-	using fiber_map = std::map<class f8_fiber_id, std::pair<void *, f8_rec_inst>>;
-	using manager_vars = std::tuple<fiber_map&, f8_spin_lock&, bool&>;
-
-	static manager_vars& get_vars() noexcept
-	{
-		static fiber_map _fb;
-		static f8_spin_lock _sl;
-		static bool _active { true };
-		static manager_vars _vars { _fb, _sl, _active };
-		return _vars;
-	}
-
-	static bool active(bool set=false, bool newval=false) noexcept
-	{
-		auto& [mp, lok, act] { get_vars() };
-		return set && act != newval ? act = newval : act;
-	}
-
-public:
-	static bool enable() noexcept { return active(true, true); }
-	static bool disable() noexcept { return active(true, false); }
-	static bool enabled() noexcept { return active(); }
-
-	template<typename Rec>
-	static bool add(f8_fiber_id id, Rec *rec)
-	{
-		auto& [mp, lok, act] { get_vars() };
-		std::lock_guard<f8_spin_lock> lk(lok);
-		if (mp.emplace(id, std::move(std::make_pair(rec, f8_rec_inst(PassTypes<Rec>())))).second)
-			return true;
-		//std::cerr << "failed to add " << id << ": " << demangler::demangle<Rec>() << '\n';
-		return false;
-	}
-
-	static bool remove(f8_fiber_id id)
-	{
-		auto& [mp, lok, act] { get_vars() };
-		std::lock_guard<f8_spin_lock> lk(lok);
-		if (auto itr { mp.find(id) }; itr != mp.end())
-		{
-			itr->second.second.dealloc(itr->second.first);
-			mp.erase(itr);
-			return true;
-		}
-		//std::cerr << id << " not found\n";
-		return false;
-	}
-
-	static int cleanup()
-	{
-		int cnt{};
-		auto& [mp, lok, act] { get_vars() };
-		std::lock_guard<f8_spin_lock> lk(lok);
-		for (auto itr { mp.begin() }; itr != mp.end(); ++itr)
-		{
-			itr->second.second.dealloc(itr->second.first);
-			++cnt;
-		}
-		mp.clear();
-		return cnt;
-	}
-
-	template<typename charT, class traitsT>
-	static void print (std::basic_ostream<charT, traitsT>& os)
-	{
-		fiber_map fb;
-		auto& [mp, lok, act] { get_vars() };
-		{
-			std::lock_guard<f8_spin_lock> lk(lok);
-			fb = mp;
-		}
-		for (const auto& pp : fb)
-			os << pp.first << " (" << pp.second.first << ',' <<  reinterpret_cast<const void* const&>(pp.second.second.dealloc) << ")\n";
-	}
-};
-
-//-----------------------------------------------------------------------------------------
-// http://ericniebler.com/2013/08/07/universal-references-and-the-copy-constructo/
-template<typename X, typename Y>
-using disable_overload = typename std::enable_if<!std::is_base_of<X, typename std::decay<Y>::type>::value>::type;
-
-struct forced_unwind
-{
-	fcontext_t fctx{};
-	forced_unwind() = default;
-	forced_unwind(fcontext_t fctx_) : fctx(fctx_) {}
-};
-
-inline fcontext_transfer_t fiber_unwind(fcontext_transfer_t t)
-{
-	throw forced_unwind(t.ctx);
-	return {};
-}
-
-template<typename Rec>
-fcontext_transfer_t fiber_exit(fcontext_transfer_t t) noexcept
-{
-	//std::cout << "fiber_exit\n";
-	// destroy context stack
-	static_cast<Rec *>(t.data)->deallocate();
-	return {};
-}
-
-template<typename Rec>
-void fiber_entry(fcontext_transfer_t t) noexcept
-{
-	// transfer control structure to the context-stack
-	Rec *rec { static_cast<Rec *>(t.data) };
-	try
-	{
-		t = jump_fcontext(t.ctx, nullptr); // jump back to 'create_context()'
-		t.ctx = rec->run(t.ctx); // start executing
-	}
-	catch (const forced_unwind& e)
-	{
-		t = { e.fctx, nullptr };
-	}
-	// destroy context-stack of 'this' context on next context
-	ontop_fcontext(t.ctx, rec, fiber_exit<Rec>);
-}
-
-template<typename Ctx, typename Fn>
-fcontext_transfer_t fiber_ontop(fcontext_transfer_t t)
-{
-    auto p { *static_cast<Fn *>(t.data) };
-    t.data = nullptr;
-    // execute function, pass fiber via reference
-    Ctx c { p(Ctx{t.ctx}) };
-    return { std::exchange(c.fctx_, nullptr), nullptr };
-}
-
-template<typename Rec, typename StackAlloc, typename Fn>
-fcontext_t create_fiber(StackAlloc&& salloc, Fn&& fn)
-{
-	auto sctx { salloc.allocate() };
-	// reserve space for control structure
-	void *storage { reinterpret_cast<void*>((reinterpret_cast<uintptr_t>(sctx.sptr) - static_cast<uintptr_t>(sizeof(Rec)))
-		& ~static_cast<uintptr_t>(0xff)) };
-	// placement new for control structure on context stack
-	Rec *record { new (storage) Rec { sctx, std::forward<StackAlloc>(salloc), std::forward<Fn>(fn) } };
-	// 64byte gap between control structure and stack top, should be 16byte aligned
-	void *top { reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(storage) - static_cast<uintptr_t>(64)) };
-	void *bottom { reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(sctx.sptr) - static_cast<uintptr_t>(sctx.ssize)) };
-	// create fast-context
-	const std::size_t size { reinterpret_cast<uintptr_t>(top) - reinterpret_cast<uintptr_t>(bottom) };
-	fcontext_t fctx { make_fcontext(top, size, fiber_entry<Rec>) };
-	// transfer control structure to context-stack
-	fctx = jump_fcontext(fctx, record).ctx;
-	if (f8_fiber_manager::enabled())
-		f8_fiber_manager::add(f8_fiber_id(fctx), record);
-	return fctx;
-}
-
-//-----------------------------------------------------------------------------------------
-template<typename Ctx, typename StackAlloc, typename Fn>
-class f8_fiber_record : protected f8_noncopyable
-{
-	fcontext_stack_t _stack;
-	typename std::decay< StackAlloc >::type _salloc;
-	typename std::decay<Fn>::type _fn;
-
-	static void destroy(f8_fiber_record *p) noexcept
-	{
-		typename std::decay<StackAlloc>::type salloc { std::move(p->_salloc) };
-		auto stack { p->_stack };
-		p->~f8_fiber_record();
-		salloc.deallocate(stack);
-	}
-
-public:
-	f8_fiber_record(fcontext_stack_t sctx, StackAlloc&& salloc, Fn&& fn) noexcept
-		: _stack(sctx), _salloc(std::forward<StackAlloc>(salloc)), _fn(std::forward<Fn>(fn)) {}
-	~f8_fiber_record() = default;
-
-	void deallocate() noexcept { destroy(this); }
-
-	fcontext_t run(fcontext_t fctx)
-	{
-		// invoke context-function
-		Ctx c { std::invoke(_fn, std::move(Ctx{fctx})) };
-		return std::exchange(c.fctx_, nullptr);
-	}
+	f8_fixedsize_placement_stack(char *top, std::size_t size=SIGSTKSZ) noexcept : f8_stack(size), _ptr(top) {}
+	fcontext_stack_t allocate() noexcept override { return { _ptr + _size, _size }; }
 };
 
 //-----------------------------------------------------------------------------------------
 class f8_fiber
 {
-	fcontext_t fctx_{ nullptr };
-	const f8_fiber_id id_; // will preserve original id
-	f8_fiber(fcontext_t fctx) noexcept : fctx_{ fctx } {}
+	fcontext_t _fctx { nullptr };
+	void (*_dealloc)(void *) { nullptr };
+	void *_rec { nullptr };
+
+	f8_fiber(fcontext_t fctx) noexcept : _fctx { fctx } {}
+
+	template<typename StackAlloc, typename Fn>
+	class f8_fiber_record
+	{
+		fcontext_stack_t _stack;
+		typename std::decay_t<StackAlloc> _salloc;
+		typename std::decay_t<Fn> _fn;
+
+		static void destroy(f8_fiber_record *p) noexcept
+		{
+			typename std::decay_t<StackAlloc> salloc { std::move(p->_salloc) };
+			auto stack { p->_stack };
+			p->~f8_fiber_record();
+			salloc.deallocate(stack);
+		}
+
+	public:
+		f8_fiber_record(fcontext_stack_t sctx, StackAlloc&& salloc, Fn&& fn) noexcept
+			: _stack(sctx), _salloc(std::forward<StackAlloc>(salloc)), _fn(std::forward<Fn>(fn)) {}
+		~f8_fiber_record() = default;
+
+		void deallocate() noexcept { destroy(this); }
+
+		fcontext_t run(fcontext_t fctx)
+		{
+			// invoke context-function
+			f8_fiber c { std::invoke(_fn, std::move(f8_fiber{fctx})) };
+			return std::exchange(c._fctx, nullptr);
+		}
+	};
 
 public:
 	f8_fiber() noexcept = default;
@@ -663,37 +403,73 @@ public:
 	/*! Ctor with function argument (usually already bound with arguments)
 	 \tparam Fn function type or method to invoke
 	 \param fn function */
-	template<typename Fn, typename = disable_overload<f8_fiber, Fn>>
+	template<typename Fn, std::enable_if_t<!std::is_base_of_v<f8_fiber, std::decay_t<Fn>>,int> = 0>
 	f8_fiber(Fn&& fn) :
 		f8_fiber { std::allocator_arg, f8_protected_fixedsize_stack(), std::forward<Fn>(fn) } {}
 
-	/*! Ctor with allocator and function argument (usually already bound with arguments); record original fiber id
+	/*! Ctor with allocator and function argument (usually already bound with arguments)
 	 \tparam StackAlloc allocator type
 	 \tparam Fn function type or method to invoke
 	 \param std::allocator_arg_t allocator disambiguator
 	 \param salloc allocator object
 	 \param fn function */
-	template<typename StackAlloc, typename Fn>
-	f8_fiber(std::allocator_arg_t, StackAlloc&& salloc, Fn&& fn) :
-		fctx_ { create_fiber<f8_fiber_record<f8_fiber, StackAlloc, Fn>> (std::forward<StackAlloc>(salloc), std::forward<Fn>(fn)) }, id_(fctx_) {}
+	template<typename StackAlloc, typename Fn, typename Rec = f8_fiber_record<StackAlloc, Fn>>
+	f8_fiber(std::allocator_arg_t, StackAlloc&& salloc, Fn&& fn)
+		: _dealloc([](void *what) noexcept { static_cast<Rec *>(what)->deallocate(); })
+	{
+		auto sctx { salloc.allocate() };
+		// reserve space for control structure
+		void *storage { reinterpret_cast<void*>((reinterpret_cast<uintptr_t>(sctx.sptr) - static_cast<uintptr_t>(sizeof(Rec)))
+			& ~static_cast<uintptr_t>(0xff)) };
+		// placement new for control structure on context stack
+		_rec = new (storage) Rec { sctx, std::forward<StackAlloc>(salloc), std::forward<Fn>(fn) };
+		// 64byte gap between control structure and stack top, should be 16byte aligned
+		void *top { reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(storage) - static_cast<uintptr_t>(64)) };
+		void *bottom { reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(sctx.sptr) - static_cast<uintptr_t>(sctx.ssize)) };
+		// create fast-context
+		const std::size_t size { reinterpret_cast<uintptr_t>(top) - reinterpret_cast<uintptr_t>(bottom) };
+		fcontext_t fctx { make_fcontext(top, size, [](fcontext_transfer_t t) noexcept // fiber_entry
+		{
+			// transfer control structure to the context-stack
+			Rec *rec { static_cast<Rec *>(t.data) };
+			try
+			{
+				t = jump_fcontext(t.ctx, nullptr); // jump back to 'create_context()'
+				t.ctx = rec->run(t.ctx); // start executing
+			}
+			catch (const forced_unwind& e)
+			{
+				t = { e._fctx, nullptr };
+			}
+			// destroy context-stack of 'this' context on next context
+			ontop_fcontext(t.ctx, rec, [](fcontext_transfer_t t) noexcept ->fcontext_transfer_t // fiber_exit
+			{
+				static_cast<Rec *>(t.data)->deallocate();
+				return {};
+			});
+		}) };
+		// transfer control structure to context-stack
+		_fctx = jump_fcontext(fctx, _rec).ctx;
+	}
 
 	virtual ~f8_fiber()
 	{
-		if (fctx_ && !remove())
-			ontop_fcontext(std::exchange(fctx_, nullptr), nullptr, fiber_unwind);
-	}
-
-	/*! Remove fiber stack, clear fiber id and render inoperable
-	 \return true on success */
-	bool remove()
-	{
-		if (id_ && f8_fiber_manager::enabled())
+		if (_fctx)
 		{
-			f8_fiber_manager::remove(id_);
-			const_cast<fcontext_t&>(id_.impl_) = fctx_ = nullptr;
-			return true;
+			if (_rec)
+			{
+				(_dealloc)(_rec);
+				_rec = _fctx = nullptr;
+			}
+			else
+			{
+				ontop_fcontext(std::exchange(_fctx, nullptr), nullptr, [](fcontext_transfer_t t)->fcontext_transfer_t // fiber_unwind
+				{
+					throw forced_unwind(t.ctx);
+					return {};
+				});
+			}
 		}
-		return false;
 	}
 
 	f8_fiber(f8_fiber&& other) noexcept { swap(other); }
@@ -710,7 +486,7 @@ public:
 	f8_fiber(const f8_fiber& other) noexcept = delete;
 	f8_fiber& operator=(const f8_fiber& other) noexcept = delete;
 
-	f8_fiber resume() && noexcept { return { jump_fcontext(std::exchange(fctx_, nullptr), nullptr).ctx }; }
+	f8_fiber resume() && noexcept { return { jump_fcontext(std::exchange(_fctx, nullptr), nullptr).ctx }; }
 	f8_fiber resume() & noexcept { return std::move(*this).resume(); }
 
 	/*! Resume given fiber
@@ -736,7 +512,13 @@ public:
 	f8_fiber resume_with(Fn&& fn) && noexcept
 	{
 		auto p { std::forward<Fn>(fn) };
-		return { ontop_fcontext(std::exchange(fctx_, nullptr), &p, fiber_ontop<f8_fiber, decltype(p)>).ctx };
+		return { ontop_fcontext(std::exchange(_fctx, nullptr), &p, [](fcontext_transfer_t t) noexcept ->fcontext_transfer_t // fiber_ontop
+		{
+			 auto pfunc { *static_cast<Fn *>(t.data) };
+			 // execute function, pass fiber via reference
+			 f8_fiber fb { pfunc(f8_fiber{t.ctx}) };
+			 return { std::exchange(fb._fctx, nullptr), nullptr };
+		}).ctx };
 	}
 
 	/*! Resume given fiber with new function
@@ -764,31 +546,56 @@ public:
 			what = std::move(std::move(what).resume_with(std::bind(std::forward<Fn>(fn), std::forward<Args>(args)...)));
 	}
 
-	bool joinable() const noexcept { return fctx_; }
-	explicit operator bool() const noexcept { return fctx_; }
-	bool operator! () const noexcept { return fctx_ == nullptr; }
-	bool operator< (const f8_fiber& other) const noexcept { return fctx_ < other.fctx_; }
+	bool joinable() const noexcept { return _fctx; }
+	explicit operator bool() const noexcept { return _fctx; }
+	bool operator! () const noexcept { return _fctx == nullptr; }
+	bool operator< (const f8_fiber& other) const noexcept { return _fctx < other._fctx; }
 
-	void swap(f8_fiber& other) noexcept { std::swap(fctx_, other.fctx_); }
+	void swap(f8_fiber& other) noexcept { std::swap(_fctx, other._fctx); }
+	static void swap(f8_fiber& l, f8_fiber& r) noexcept { l.swap(r); }
 
 	template<typename charT, class traitsT>
 	friend std::basic_ostream<charT, traitsT>& operator<<(std::basic_ostream<charT, traitsT>& os, const f8_fiber& what)
 	{
-		if (what.fctx_)
-			return os << what.fctx_;
-		return os << "{not-a-context}";
+		if (what._fctx)
+			return os << what._fctx << " (" << what._rec << ',' << reinterpret_cast<const void* const&>(what._dealloc) << ')';
+		return os << "{not-a-fiber}";
 	}
 
-	f8_fiber_id get_id() const noexcept { return id_; }
+	/// unique fiber id
+	class f8_fiber_id
+	{
+		const fcontext_t impl_{ nullptr };
 
-	template<typename Ctx, typename StackAlloc, typename Fn>
-	friend class f8_fiber_record;
+	public:
+		f8_fiber_id() = default;
+		explicit f8_fiber_id(const fcontext_t impl) noexcept : impl_{ impl } {}
 
-	template<typename Ctx, typename Fn>
-	friend fcontext_transfer_t fiber_ontop(fcontext_transfer_t);
+#if __cplusplus >= 202002L
+		constexpr auto operator<=>(const f8_fiber_id& other) const noexcept { return impl_ <=> other.impl_; }
+#else
+		constexpr bool operator==(const f8_fiber_id& other) const noexcept { return impl_ == other.impl_; }
+		constexpr bool operator!=(const f8_fiber_id& other) const noexcept { return impl_ != other.impl_; }
+		constexpr bool operator<(const f8_fiber_id& other) const noexcept { return impl_ < other.impl_; }
+		constexpr bool operator>(const f8_fiber_id& other) const noexcept { return other.impl_ < impl_; }
+		constexpr bool operator<=(const f8_fiber_id& other) const noexcept { return !(*this > other); }
+		constexpr bool operator>=(const f8_fiber_id& other) const noexcept { return !(*this < other); }
+#endif
+
+		template<typename charT, class traitsT>
+		friend std::basic_ostream<charT, traitsT>& operator<<(std::basic_ostream<charT, traitsT>& os, const f8_fiber_id& what)
+		{
+			if (what.impl_)
+				return os << what.impl_;
+			return os << "{not-valid (nullptr)}";
+		}
+
+		constexpr explicit operator bool() const noexcept { return impl_ != nullptr; }
+		constexpr bool operator!() const noexcept { return impl_ == nullptr; }
+	};
+
+	f8_fiber_id get_id() const noexcept { return f8_fiber_id(_fctx); }
 };
-
-inline void swap(f8_fiber& l, f8_fiber& r) noexcept { l.swap(r); }
 
 #define f8_yield(f) f8_fiber::resume(f)
 #define f8_yield_with(f,fn,...) f8_fiber::resume_with(std::move(f), fn, __VA_ARGS__)
