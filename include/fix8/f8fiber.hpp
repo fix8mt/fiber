@@ -80,185 +80,6 @@ struct forced_unwind
 };
 
 //-----------------------------------------------------------------------------------------
-extern "C"
-{
-	fcontext_transfer_t jump_fcontext(const fcontext_t to, void *vp);
-	fcontext_t make_fcontext(void *sp, size_t size, void (*fn)(fcontext_transfer_t));
-	fcontext_transfer_t ontop_fcontext(const fcontext_t to, void *vp, fcontext_transfer_t (*fn)(fcontext_transfer_t));
-}
-
-//-----------------------------------------------------------------------------------------
-#if !defined F8FIBER_USE_ASM_SOURCE // this is the default
-// note: .weak symbol - if multiple definitions only one symbol will be used
-asm(R"(.text
-.weak jump_fcontext,make_fcontext,ontop_fcontext
-.align 16
-.type jump_fcontext,@function
-jump_fcontext:
-	leaq  -0x38(%rsp), %rsp
-	stmxcsr  (%rsp)
-	fnstcw   0x4(%rsp)
-	movq  %r12,0x8(%rsp)
-	movq  %r13,0x10(%rsp)
-	movq  %r14,0x18(%rsp)
-	movq  %r15,0x20(%rsp)
-	movq  %rbx,0x28(%rsp)
-	movq  %rbp,0x30(%rsp)
-	movq  %rsp,%rax
-	movq  %rdi,%rsp
-	movq  0x38(%rsp),%r8
-	ldmxcsr (%rsp)
-	fldcw   0x4(%rsp)
-	movq  0x8(%rsp),%r12
-	movq  0x10(%rsp),%r13
-	movq  0x18(%rsp),%r14
-	movq  0x20(%rsp),%r15
-	movq  0x28(%rsp),%rbx
-	movq  0x30(%rsp),%rbp
-	leaq  0x40(%rsp),%rsp
-	movq  %rsi,%rdx
-	movq  %rax,%rdi
-	jmp  *%r8
-.size jump_fcontext,.-jump_fcontext
-.type make_fcontext,@function
-make_fcontext:
-	movq  %rdi,%rax
-	andq  $-16,%rax
-	leaq  -0x40(%rax),%rax
-	movq  %rdx,0x28(%rax)
-	stmxcsr (%rax)
-	fnstcw  0x4(%rax)
-	leaq  trampoline(%rip),%rcx
-	movq  %rcx,0x38(%rax)
-	leaq  finish(%rip),%rcx
-	movq  %rcx,0x30(%rax)
-	ret
-trampoline:
-	push %rbp
-	jmp *%rbx
-finish:
-	xorq  %rdi,%rdi
-	call  _exit@PLT
-	hlt
-.size make_fcontext,.-make_fcontext
-.type ontop_fcontext,@function
-ontop_fcontext:
-	movq  %rdx,%r8
-	leaq  -0x38(%rsp),%rsp
-	stmxcsr (%rsp)
-	fnstcw  0x4(%rsp)
-	movq  %r12,0x8(%rsp)
-	movq  %r13,0x10(%rsp)
-	movq  %r14,0x18(%rsp)
-	movq  %r15,0x20(%rsp)
-	movq  %rbx,0x28(%rsp)
-	movq  %rbp,0x30(%rsp)
-	movq  %rsp,%rax
-	movq  %rdi,%rsp
-	ldmxcsr (%rsp)
-	fldcw   0x4(%rsp)
-	movq  0x8(%rsp),%r12
-	movq  0x10(%rsp),%r13
-	movq  0x18(%rsp),%r14
-	movq  0x20(%rsp),%r15
-	movq  0x28(%rsp),%rbx
-	movq  0x30(%rsp),%rbp
-	leaq  0x38(%rsp),%rsp
-	movq  %rsi,%rdx
-	movq  %rax,%rdi
-	jmp  *%r8
-.size ontop_fcontext,.-ontop_fcontext
-.section .note.GNU-stack,"",%progbits
-)");
-
-#else // F8FIBER_USE_ASM_SOURCE, define in your source compilation unit before including this file and then declare F8FIBER_ASM_SOURCE
-
-/// The following macro(;) must appear in one compilation unit (not a header)
-#define F8FIBER_ASM_SOURCE										\
-asm(".text\n" 														\
-".globl jump_fcontext,make_fcontext,ontop_fcontext\n"	\
-".align 16\n" 														\
-".type jump_fcontext,@function\n" 							\
-"jump_fcontext:\n" 												\
-"	leaq  -0x38(%rsp), %rsp\n" 								\
-"	stmxcsr  (%rsp)\n" 											\
-"	fnstcw   0x4(%rsp)\n" 										\
-"	movq  %r12,0x8(%rsp)\n" 									\
-"	movq  %r13,0x10(%rsp)\n" 									\
-"	movq  %r14,0x18(%rsp)\n" 									\
-"	movq  %r15,0x20(%rsp)\n" 									\
-"	movq  %rbx,0x28(%rsp)\n" 									\
-"	movq  %rbp,0x30(%rsp)\n" 									\
-"	movq  %rsp,%rax\n" 											\
-"	movq  %rdi,%rsp\n" 											\
-"	movq  0x38(%rsp),%r8\n" 									\
-"	ldmxcsr (%rsp)\n" 											\
-"	fldcw   0x4(%rsp)\n" 										\
-"	movq  0x8(%rsp),%r12\n" 									\
-"	movq  0x10(%rsp),%r13\n" 									\
-"	movq  0x18(%rsp),%r14\n" 									\
-"	movq  0x20(%rsp),%r15\n" 									\
-"	movq  0x28(%rsp),%rbx\n" 									\
-"	movq  0x30(%rsp),%rbp\n" 									\
-"	leaq  0x40(%rsp),%rsp\n" 									\
-"	movq  %rsi,%rdx\n" 											\
-"	movq  %rax,%rdi\n" 											\
-"	jmp  *%r8\n" 													\
-".size jump_fcontext,.-jump_fcontext\n" 					\
-".type make_fcontext,@function\n" 							\
-"make_fcontext:\n" 												\
-"	movq  %rdi,%rax\n" 											\
-"	andq  $-16,%rax\n" 											\
-"	leaq  -0x40(%rax),%rax\n" 									\
-"	movq  %rdx,0x28(%rax)\n" 									\
-"	stmxcsr (%rax)\n" 											\
-"	fnstcw  0x4(%rax)\n" 										\
-"	leaq  trampoline(%rip),%rcx\n" 							\
-"	movq  %rcx,0x38(%rax)\n" 									\
-"	leaq  finish(%rip),%rcx\n" 								\
-"	movq  %rcx,0x30(%rax)\n" 									\
-"	ret\n" 															\
-"trampoline:\n" 													\
-"	push %rbp\n" 													\
-"	jmp *%rbx\n" 													\
-"finish:\n" 														\
-"	xorq  %rdi,%rdi\n" 											\
-"	call  _exit@PLT\n" 											\
-"	hlt\n" 															\
-".size make_fcontext,.-make_fcontext\n	"	 				\
-".type ontop_fcontext,@function\n" 							\
-"ontop_fcontext:\n" 												\
-"	movq  %rdx,%r8\n" 											\
-"	leaq  -0x38(%rsp),%rsp\n" 									\
-"	stmxcsr (%rsp)\n" 											\
-"	fnstcw  0x4(%rsp)\n" 										\
-"	movq  %r12,0x8(%rsp)\n" 									\
-"	movq  %r13,0x10(%rsp)\n" 									\
-"	movq  %r14,0x18(%rsp)\n" 									\
-"	movq  %r15,0x20(%rsp)\n" 									\
-"	movq  %rbx,0x28(%rsp)\n" 									\
-"	movq  %rbp,0x30(%rsp)\n" 									\
-"	movq  %rsp,%rax\n" 											\
-"	movq  %rdi,%rsp\n" 											\
-"	ldmxcsr (%rsp)\n" 											\
-"	fldcw   0x4(%rsp)\n" 										\
-"	movq  0x8(%rsp),%r12\n" 									\
-"	movq  0x10(%rsp),%r13\n" 									\
-"	movq  0x18(%rsp),%r14\n" 									\
-"	movq  0x20(%rsp),%r15\n" 									\
-"	movq  0x28(%rsp),%rbx\n" 									\
-"	movq  0x30(%rsp),%rbp\n" 									\
-"	leaq  0x38(%rsp),%rsp\n" 									\
-"	movq  %rsi,%rdx\n" 											\
-"	movq  %rax,%rdi\n" 											\
-"	jmp  *%r8\n" 													\
-".size ontop_fcontext,.-ontop_fcontext\n" 				\
-".section .note.GNU-stack,\"\",%progbits\n" 				\
-)
-
-#endif // F8FIBER_USE_ASM_SOURCE
-
-//-----------------------------------------------------------------------------------------
 /// Anonymous memory mapped region based stack
 class f8_stack
 {
@@ -562,6 +383,10 @@ public:
 		return os << "{not-a-fiber}";
 	}
 
+	static fcontext_transfer_t jump_fcontext(const fcontext_t to, void *vp);
+	static fcontext_t make_fcontext(void *sp, size_t size, void (*fn)(fcontext_transfer_t));
+	static fcontext_transfer_t ontop_fcontext(const fcontext_t to, void *vp, fcontext_transfer_t (*fn)(fcontext_transfer_t));
+
 	/// unique fiber id
 	class f8_fiber_id
 	{
@@ -596,6 +421,86 @@ public:
 
 	f8_fiber_id get_id() const noexcept { return f8_fiber_id(_fctx); }
 };
+
+//-----------------------------------------------------------------------------------------
+asm(R"(.text
+.align 16
+.type _ZN4FIX88f8_fiber13jump_fcontextEPvS1_,@function
+_ZN4FIX88f8_fiber13jump_fcontextEPvS1_:
+	leaq  -0x38(%rsp), %rsp
+	stmxcsr  (%rsp)
+	fnstcw   0x4(%rsp)
+	movq  %r12,0x8(%rsp)
+	movq  %r13,0x10(%rsp)
+	movq  %r14,0x18(%rsp)
+	movq  %r15,0x20(%rsp)
+	movq  %rbx,0x28(%rsp)
+	movq  %rbp,0x30(%rsp)
+	movq  %rsp,%rax
+	movq  %rdi,%rsp
+	movq  0x38(%rsp),%r8
+	ldmxcsr (%rsp)
+	fldcw   0x4(%rsp)
+	movq  0x8(%rsp),%r12
+	movq  0x10(%rsp),%r13
+	movq  0x18(%rsp),%r14
+	movq  0x20(%rsp),%r15
+	movq  0x28(%rsp),%rbx
+	movq  0x30(%rsp),%rbp
+	leaq  0x40(%rsp),%rsp
+	movq  %rsi,%rdx
+	movq  %rax,%rdi
+	jmp  *%r8
+.size _ZN4FIX88f8_fiber13jump_fcontextEPvS1_,.-_ZN4FIX88f8_fiber13jump_fcontextEPvS1_
+.type _ZN4FIX88f8_fiber13make_fcontextEPvmPFvNS_19fcontext_transfer_tEE,@function
+_ZN4FIX88f8_fiber13make_fcontextEPvmPFvNS_19fcontext_transfer_tEE:
+	movq  %rdi,%rax
+	andq  $-16,%rax
+	leaq  -0x40(%rax),%rax
+	movq  %rdx,0x28(%rax)
+	stmxcsr (%rax)
+	fnstcw  0x4(%rax)
+	leaq  trampoline(%rip),%rcx
+	movq  %rcx,0x38(%rax)
+	leaq  finish(%rip),%rcx
+	movq  %rcx,0x30(%rax)
+	ret
+trampoline:
+	push %rbp
+	jmp *%rbx
+finish:
+	xorq  %rdi,%rdi
+	call  _exit@PLT
+	hlt
+.size _ZN4FIX88f8_fiber13make_fcontextEPvmPFvNS_19fcontext_transfer_tEE,.-_ZN4FIX88f8_fiber13make_fcontextEPvmPFvNS_19fcontext_transfer_tEE
+.type _ZN4FIX88f8_fiber14ontop_fcontextEPvS1_PFNS_19fcontext_transfer_tES2_E,@function
+_ZN4FIX88f8_fiber14ontop_fcontextEPvS1_PFNS_19fcontext_transfer_tES2_E:
+	movq  %rdx,%r8
+	leaq  -0x38(%rsp),%rsp
+	stmxcsr (%rsp)
+	fnstcw  0x4(%rsp)
+	movq  %r12,0x8(%rsp)
+	movq  %r13,0x10(%rsp)
+	movq  %r14,0x18(%rsp)
+	movq  %r15,0x20(%rsp)
+	movq  %rbx,0x28(%rsp)
+	movq  %rbp,0x30(%rsp)
+	movq  %rsp,%rax
+	movq  %rdi,%rsp
+	ldmxcsr (%rsp)
+	fldcw   0x4(%rsp)
+	movq  0x8(%rsp),%r12
+	movq  0x10(%rsp),%r13
+	movq  0x18(%rsp),%r14
+	movq  0x20(%rsp),%r15
+	movq  0x28(%rsp),%rbx
+	movq  0x30(%rsp),%rbp
+	leaq  0x38(%rsp),%rsp
+	movq  %rsi,%rdx
+	movq  %rax,%rdi
+	jmp  *%r8
+.size _ZN4FIX88f8_fiber14ontop_fcontextEPvS1_PFNS_19fcontext_transfer_tES2_E,.-_ZN4FIX88f8_fiber14ontop_fcontextEPvS1_PFNS_19fcontext_transfer_tES2_E
+)");
 
 #define f8_yield(f) f8_fiber::resume(f)
 #define f8_yield_with(f,fn,...) f8_fiber::resume_with(std::move(f), fn, __VA_ARGS__)
