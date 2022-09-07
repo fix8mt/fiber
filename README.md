@@ -15,7 +15,7 @@ This is a modified and stripped down version of [boost::fiber](https://www.boost
 - std::bind can be omitted with args forwarded by ctor
 - default stack uses mmap, control structure allocated on stack; heap stack available
 - custom allocator support, default protected stack
-- exception safe - all exceptions can be captured by a std::exception_ptr within the fiber, and can be rethrown by the caller
+- exception safe - all exceptions can be captured by a `std::exception_ptr` within the fiber, and can be rethrown by the caller
 - simplified API, rvalue and lvalue resume()
 - f8_fiber printer
 - supports any callable object with first parameter `f8_fiber&&` and returning `f8_fiber`
@@ -30,7 +30,7 @@ cd f8fiber
 mkdir build
 cd build
 cmake ..
-make
+make -j4
 ```
 
 ## Build Options
@@ -51,8 +51,8 @@ This will define the fcontext assembly functions in your source file instead.
 ## Runtime Options
 
 ### Exceptions
-Any exceptions caught within a fiber should be assigned to a std::exception pointer using std::current_exception. The calling function should then rethrow using
-std::rethrow_exception, as in the following example:
+Any exceptions caught within a fiber should be assigned to a `std::exception_ptr` using `std::current_exception`. The calling function should then rethrow using
+`std::rethrow_exception`, as in the following example:
 
 ```c++
 std::exception_ptr _eptr;
