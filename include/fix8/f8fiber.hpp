@@ -52,10 +52,6 @@
 # define SIGSTKSZ 131072 // 128kb recommended
 #endif
 
-#if !defined (MINSIGSTKSZ)
-# define MINSIGSTKSZ 32768 // 32kb minimum
-#endif
-
 //----------------------------------------------------------------------------------------
 namespace FIX8 {
 
@@ -80,7 +76,7 @@ struct forced_unwind
 };
 
 //-----------------------------------------------------------------------------------------
-/// Anonymous memory mapped region based stack
+/// ABC stack
 class f8_stack
 {
 protected:
@@ -106,19 +102,22 @@ public:
 		// add one page at bottom that will be used as guard-page
 		const std::size_t __size { (pages + 1) * PageSize };
 
+		if (void *vp { ::mmap(0, __size, PROT_READ | PROT_WRITE, MAP_PRIVATE |
 #if defined(USE_MAP_STACK)
-		void *vp = ::mmap(0, __size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | MAP_STACK, -1, 0);
+			MAP_ANON | MAP_STACK,
 #elif defined(MAP_ANON)
-		void *vp = ::mmap(0, __size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+			MAP_ANON,
 #else
-		void *vp = ::mmap(0, __size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+			MAP_ANONYMOUS,
 #endif
-		if (vp == MAP_FAILED)
-			throw std::bad_alloc();
-
-		// conforming to POSIX.1-2001
-		::mprotect(vp, PageSize, PROT_NONE);
-		return { static_cast<char *>(vp) + __size, __size };
+			-1, 0) }; vp == MAP_FAILED)
+				throw std::bad_alloc();
+		else
+		{
+			// conforming to POSIX.1-2001
+			::mprotect(vp, PageSize, PROT_NONE);
+			return { static_cast<char *>(vp) + __size, __size };
+		}
 	}
 
 	void deallocate(fcontext_stack_t& sctx) noexcept override
@@ -172,11 +171,11 @@ class f8_fiber
 		typename std::decay_t<StackAlloc> _salloc;
 		typename std::decay_t<Fn> _fn;
 
-		static void destroy(f8_fiber_record *p) noexcept
+		static void destroy(f8_fiber_record *ptr) noexcept
 		{
-			typename std::decay_t<StackAlloc> salloc { std::move(p->_salloc) };
-			auto stack { p->_stack };
-			p->~f8_fiber_record();
+			typename std::decay_t<StackAlloc> salloc { std::move(ptr->_salloc) };
+			auto stack { ptr->_stack };
+			ptr->~f8_fiber_record();
 			salloc.deallocate(stack);
 		}
 
@@ -190,8 +189,8 @@ class f8_fiber
 		fcontext_t run(fcontext_t fctx)
 		{
 			// invoke context-function
-			f8_fiber c { std::invoke(_fn, std::move(f8_fiber{fctx})) };
-			return std::exchange(c._fctx, nullptr);
+			f8_fiber fb { std::invoke(_fn, std::move(f8_fiber{fctx})) };
+			return std::exchange(fb._fctx, nullptr);
 		}
 	};
 
@@ -206,7 +205,7 @@ public:
     \param args to pass */
 	template<typename Fn, typename... Args, std::enable_if_t<!std::is_bind_expression_v<Fn>,int> = 0>
 	f8_fiber(Fn&& fn, Args&&... args) :
-		f8_fiber(std::allocator_arg, f8_protected_fixedsize_stack(), std::bind(std::forward<Fn>(fn), std::forward<Args>(args)...)) {}
+		f8_fiber { std::allocator_arg, f8_protected_fixedsize_stack(), std::bind(std::forward<Fn>(fn), std::forward<Args>(args)...) } {}
 
 	/*! Ctor with custom allocator and arguments passed to std::bind; this allows you to simply pass
 	  the bind arguments directly without needed to call bind yourself
@@ -219,7 +218,7 @@ public:
     \param args to pass */
 	template<typename StackAlloc, typename Fn, typename... Args, std::enable_if_t<!std::is_bind_expression_v<Fn>,int> = 0>
 	f8_fiber(std::allocator_arg_t, StackAlloc&& salloc, Fn&& fn, Args&&... args) :
-		f8_fiber(std::allocator_arg, std::forward<StackAlloc>(salloc), std::bind(std::forward<Fn>(fn), std::forward<Args>(args)...)) {}
+		f8_fiber { std::allocator_arg, std::forward<StackAlloc>(salloc), std::bind(std::forward<Fn>(fn), std::forward<Args>(args)...) } {}
 
 	/*! Ctor with function argument (usually already bound with arguments)
 	 \tparam Fn function type or method to invoke
@@ -333,11 +332,11 @@ public:
 	f8_fiber resume_with(Fn&& fn) && noexcept
 	{
 		auto p { std::forward<Fn>(fn) };
-		return { ontop_fcontext(std::exchange(_fctx, nullptr), &p, [](fcontext_transfer_t t) noexcept ->fcontext_transfer_t // fiber_ontop
+		return { ontop_fcontext(std::exchange(_fctx, nullptr), &p, [](fcontext_transfer_t trf) noexcept ->fcontext_transfer_t // fiber_ontop
 		{
-			 auto pfunc { *static_cast<Fn *>(t.data) };
+			 auto pfunc { *static_cast<Fn *>(trf.data) };
 			 // execute function, pass fiber via reference
-			 f8_fiber fb { pfunc(f8_fiber{t.ctx}) };
+			 f8_fiber fb { pfunc(f8_fiber{trf.ctx}) };
 			 return { std::exchange(fb._fctx, nullptr), nullptr };
 		}).ctx };
 	}
