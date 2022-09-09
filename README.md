@@ -11,13 +11,13 @@ This is a modified and stripped down version of [boost::fiber](https://www.boost
 - **x86_64 Linux only**
 - single _header-only_
 - auto cleanup - fiber will be removed when it goes out of scope without needing it to 'return'
-- fcontext implemented with inline assembly
+- fcontext implemented with inline assembly as static methods
 - `std::bind` can be omitted with args forwarded by ctor
 - default stack uses `mmap`, control structure allocated on stack; heap stack available
 - custom allocator support, default protected stack
 - exception safe - all exceptions can be captured by a `std::exception_ptr` within the fiber, and can be rethrown by the caller
-- simplified API, rvalue and lvalue resume()
-- f8_fiber printer
+- simplified API, rvalue and lvalue `resume`
+- `f8_fiber` printer
 - supports any callable object with first parameter `f8_fiber&&` and returning `f8_fiber`
 - no scheduler, no `boost::context`
 - _de-boosted_, no boost dependencies
