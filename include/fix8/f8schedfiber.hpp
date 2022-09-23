@@ -3,7 +3,8 @@
 // Copyright (C) 2022 Fix8 Market Technologies Pty Ltd
 // see https://github.com/fix8mt/f8fiber
 //
-// Lightweight header-only stackful per-thread fiber with built-in roundrobin scheduler
+// Lightweight header-only stackful per-thread fiber
+//		with built-in roundrobin scheduler x86_64 / linux only
 //
 // Distributed under the Boost Software License, Version 1.0 August 17th, 2003
 //
@@ -33,6 +34,7 @@
 #define FIX8_SCHEDFIBER_HPP_
 #include <iostream>
 #include <type_traits>
+#include <future>
 #include <queue>
 #include <chrono>
 #include <algorithm>
@@ -133,6 +135,18 @@ public:
 };
 
 //-----------------------------------------------------------------------------------------
+enum class launch { dispatch, post }; // from boost::fiber
+
+template<typename T>
+struct is_launch_policy : public std::false_type {}; // from boost::fiber
+
+template<>
+struct is_launch_policy<launch> : public std::true_type {}; // from boost::fiber
+
+template<typename T>
+inline constexpr bool is_launch_policy_v = is_launch_policy<T>::value;
+
+//-----------------------------------------------------------------------------------------
 class alignas(16) f8_sched_fiber
 {
 	uint64_t *_stk; // top of f8_sched_fiber stack
@@ -142,7 +156,7 @@ class alignas(16) f8_sched_fiber
 	std::condition_variable _cv_join;
 	std::mutex _join_mutex;
 
-	enum FiberFlags { main, finished, suspended, count  };
+	enum FiberFlags { main, finished, suspended, dispatched, count  };
 
 	struct cvars
 	{
@@ -160,7 +174,7 @@ class alignas(16) f8_sched_fiber
 	static void f8_sched_fiber_exit()
 	{
 		std::cout << "f8_sched_fiber has exited. Terminating application.\n";
-		exit(0);
+		exit(1);
 	}
 
 	template<typename Fn>
@@ -194,18 +208,29 @@ class alignas(16) f8_sched_fiber
 
 public:
 	template<typename Fn, typename... Args, std::enable_if_t<!std::is_bind_expression_v<Fn>,int> = 0>
-	f8_sched_fiber(Fn&& func, Args&&... args) : f8_sched_fiber(std::bind(std::forward<Fn>(func), std::forward<Args>(args)...)) {}
+	f8_sched_fiber(Fn&& func, Args&&... args) : f8_sched_fiber(launch::post, std::bind(std::forward<Fn>(func), std::forward<Args>(args)...)) {}
+
+	template<typename Fn, typename... Args, std::enable_if_t<!std::is_bind_expression_v<Fn>,int> = 0>
+	f8_sched_fiber(launch policy, Fn&& func, Args&&... args) : f8_sched_fiber(policy, std::bind(std::forward<Fn>(func), std::forward<Args>(args)...)) {}
+
+	template<typename Fn>
+	f8_sched_fiber(Fn&& func, size_t stacksz=SIGSTKSZ) : f8_sched_fiber(launch::post, std::forward<Fn>(func), stacksz) {}
 
 	template<typename Fn, typename Wrapper = callable_wrapper<Fn>>
-	f8_sched_fiber(Fn&& func, size_t stacksz=SIGSTKSZ) : _stk_alloc(new uint64_t[stacksz / sizeof(uint64_t)])
+	f8_sched_fiber(launch policy, Fn&& func, size_t stacksz=SIGSTKSZ) : _stk_alloc(new uint64_t[stacksz / sizeof(uint64_t)])
 	{
 		_stk = _stk_alloc + stacksz / sizeof(uint64_t) - 1; // top of stack
 		*--_stk = reinterpret_cast<uint64_t>(jumper<Wrapper>);
-		*--_stk = reinterpret_cast<uint64_t>(new (_stk_alloc) callable_wrapper(std::forward<Fn>(func)));
+		*--_stk = reinterpret_cast<uint64_t>(new (_stk_alloc) callable_wrapper(std::forward<Fn>(func))); // store at bottom of stack
 		std::fill(_stk -= 7, _stk, 0x0);
 		auto& [un, sch, cur] { get_vars() };
-		if (un.insert(this).second)
-			sch.push(this);
+		un.insert(this);
+		sch.push(this);
+		if (policy == launch::dispatch)
+		{
+			_flags.set(FiberFlags::dispatched);
+			f8_this_fiber::yield();
+		}
 	}
 
 	f8_sched_fiber(f8_sched_fiber&&) = default;
@@ -232,10 +257,12 @@ public:
 		}
 	}
 	bool joinable() const noexcept { return !_flags[FiberFlags::finished]; };
+	void detach() { get_vars()._uniq.erase(this); }
 
 	explicit operator bool() const noexcept { return joinable(); }
 	bool operator! () const noexcept { return !joinable(); }
 
+	launch get_policy() const { return _flags[FiberFlags::dispatched] ? launch::dispatch : launch::post; }
 	f8_fiber_id get_id() const noexcept { return f8_fiber_id(!_flags[FiberFlags::main] ? this : nullptr); }
 
 	friend std::ostream& operator<<(std::ostream& os, const f8_sched_fiber& what)
@@ -245,6 +272,66 @@ public:
 	friend f8_this_fiber;
 	friend f8_fibers;
 };
+
+//-----------------------------------------------------------------------------------------
+// static void f8_sched_fiber::_coroswitch(f8_sched_fiber *old, f8_sched_fiber *newer) noexcept;
+asm(R"(.text
+.align 16
+.type _ZN4FIX814f8_sched_fiber11_coroswitchEPS0_S1_,@function
+_ZN4FIX814f8_sched_fiber11_coroswitchEPS0_S1_:
+	subq $0x40,%rsp
+   stmxcsr (%rsp)
+   fnstcw  4(%rsp)
+	movq %r15,8(%rsp)
+	movq %r14,8*2(%rsp)
+	movq %r13,8*3(%rsp)
+	movq %r12,8*4(%rsp)
+	movq %rbx,8*5(%rsp)
+	movq %rbp,8*6(%rsp)
+	movq %rdi,8*7(%rsp)
+
+	mov %rsp,(%rdi)
+	mov (%rsi),%rsp
+
+   ldmxcsr (%rsp)
+   fldcw  4(%rsp)
+   movq 8(%rsp),%r15
+   movq 8*2(%rsp),%r14
+   movq 8*3(%rsp),%r13
+   movq 8*4(%rsp),%r12
+   movq 8*5(%rsp),%rbx
+   movq 8*6(%rsp),%rbp
+   movq 8*7(%rsp),%rdi
+	movq 8*8(%rsp),%r8
+	addq $0x48,%rsp
+   jmp *%r8
+.size _ZN4FIX814f8_sched_fiber11_coroswitchEPS0_S1_,.-_ZN4FIX814f8_sched_fiber11_coroswitchEPS0_S1_
+)");
+
+//-----------------------------------------------------------------------------------------
+// custom async, uses f8_sched_fiber
+template<typename Fn, typename... Args>
+std::future<typename std::result_of_t<typename std::enable_if_t<!is_launch_policy_v
+	<typename std::decay_t<Fn>>, typename std::decay_t<Fn>>(typename std::decay_t<Args>...)>>
+async(Fn&& fn, Args... args)
+{
+	using result_type = typename std::result_of_t<typename std::decay_t<Fn>(typename std::decay_t<Args>...)>;
+	std::packaged_task<result_type(typename std::decay_t<Args>...)> task { std::forward<Fn>(fn) };
+	std::future<result_type> fut { task.get_future() };
+	f8_sched_fiber { std::move(task), std::forward<Args>(args)... }.detach();
+	return fut;
+}
+
+template<typename Fn, typename... Args>
+std::future<typename std::result_of_t<typename std::decay_t<Fn>(typename std::decay_t<Args>...)>>
+async(launch policy, Fn&& fn, Args... args)
+{
+	using result_type = typename std::result_of_t<typename std::decay_t<Fn>(typename std::decay_t<Args>...)>;
+	std::packaged_task<result_type(typename std::decay_t<Args>...)> task { std::forward<Fn>(fn) };
+	std::future<result_type> fut { task.get_future() };
+	f8_sched_fiber { policy, std::move(task), std::forward<Args>(args)... }.detach();
+	return fut;
+}
 
 //-----------------------------------------------------------------------------------------
 f8_fiber_id f8_this_fiber::get_id() noexcept { return f8_sched_fiber::get_vars()._curr->get_id(); }
@@ -311,41 +398,6 @@ void f8_fibers::print(std::ostream& os) noexcept
 	for (const auto& pp : f8_sched_fiber::get_vars()._uniq)
 		os << *pp << std::endl;
 }
-
-//-----------------------------------------------------------------------------------------
-// static void f8_sched_fiber::_coroswitch(f8_sched_fiber *old, f8_sched_fiber *newer) noexcept;
-asm(R"(.text
-.align 16
-.type _ZN4FIX814f8_sched_fiber11_coroswitchEPS0_S1_,@function
-_ZN4FIX814f8_sched_fiber11_coroswitchEPS0_S1_:
-	subq $0x40,%rsp
-   stmxcsr (%rsp)
-   fnstcw  4(%rsp)
-	movq %r15,8(%rsp)
-	movq %r14,8*2(%rsp)
-	movq %r13,8*3(%rsp)
-	movq %r12,8*4(%rsp)
-	movq %rbx,8*5(%rsp)
-	movq %rbp,8*6(%rsp)
-	movq %rdi,8*7(%rsp)
-
-	mov %rsp,(%rdi)
-	mov (%rsi),%rsp
-
-   ldmxcsr (%rsp)
-   fldcw  4(%rsp)
-   movq 8(%rsp),%r15
-   movq 8*2(%rsp),%r14
-   movq 8*3(%rsp),%r13
-   movq 8*4(%rsp),%r12
-   movq 8*5(%rsp),%rbx
-   movq 8*6(%rsp),%rbp
-   movq 8*7(%rsp),%rdi
-	movq 8*8(%rsp),%r8
-	addq $0x48,%rsp
-   jmp *%r8
-.size _ZN4FIX814f8_sched_fiber11_coroswitchEPS0_S1_,.-_ZN4FIX814f8_sched_fiber11_coroswitchEPS0_S1_
-)");
 
 //-----------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------

@@ -1,37 +1,39 @@
 #include <iostream>
 #include <functional>
-#include <deque>
-#include <set>
+#include <future>
 #include <fix8/f8schedfiber.hpp>
 
-// CC=gcc CXX="g++ -ggdb" CXXFLAGS=-O0 -DCMAKE_BUILD_TYPE=Debug cmake ..
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
 
 //-----------------------------------------------------------------------------------------
 struct foo
 {
-	void sub(int arg)
+	int sub(int arg)
 	{
+		fibers::print(std::cout);
 		std::cout << "\tstarting " << arg << '\n';
 		for (int ii{}; ii < arg; )
-		{
 			std::cout << '\t' << arg << ": " << ++ii << '\n';
-			//this_fiber::yield();
-		}
 		std::cout << "\tleaving " << arg << '\n';
+		return arg * 100;
 	}
 };
 
 //-----------------------------------------------------------------------------------------
 int main(void)
 {
-	foo bar;
-	f8_sched_fiber sub_co(&foo::sub, &bar, 10);
-	std::cout << "main\n";
-	this_fiber::yield();
-	sub_co.join();
-	std::cout << "Exiting from main\n";
-	std::cout << sizeof(f8_sched_fiber) << '\n';
+	try
+	{
+		foo bar;
+		std::future<int> myfuture { async(launch::dispatch, &foo::sub, &bar, 10) };
+		std::cout << "Exiting from main\n";
+		std::cout << "Future result = " << myfuture.get() << '\n';
+		fibers::print(std::cout);
+	}
+	catch (const std::future_error& e)
+	{
+		std::cerr << "Exception: " << e.what() << '(' << e.code() << ")\n";
+	}
 	return 0;
 }

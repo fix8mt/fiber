@@ -1,8 +1,12 @@
 # ----------------------------------------------------------------------------------------
 # f8_fiber (header only) based on boost::fiber, x86_64 / linux only / de-boosted
 # Modifications Copyright (C) 2022 Fix8 Market Technologies Pty Ltd
-# see https://github.com/fix8mt/f8fiber
 #
+# f8_sched_fiber (header only) Lightweight header-only stackful per-thread fiber
+# 		with built-in roundrobin scheduler x86_64 / linux only
+# Copyright (C) 2022 Fix8 Market Technologies Pty Ltd
+#
+# see https://github.com/fix8mt/f8fiber
 # Distributed under the Boost Software License, Version 1.0 August 17th, 2003
 #
 # Permission is hereby granted, free of charge, to any person or organization
@@ -34,8 +38,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 include_directories(${CMAKE_SOURCE_DIR}/include)
 project (f8fiber VERSION 1.2)
 set(eg ${CMAKE_SOURCE_DIR}/examples)
-list(APPEND Src f8fibertest f8fibertest2 f8fibertest3 f8fibertest4 f8fibertest5 f8fibertest6 f8fibertest7 f8fibertest8 schedfiber schedfiber1)
-foreach(x IN LISTS Src)
-	add_executable(${x} ${eg}/${x}.cpp)
+file(GLOB srcs "${eg}/f8fibertest?.cpp" "${eg}/f8schedfiber*.cpp")
+foreach(x ${srcs})
+	get_filename_component(fn ${x} NAME_WLE)
+	add_executable(${fn} ${x})
 endforeach()
 target_sources(f8fibertest3 PUBLIC ${eg}/f8fibertest3foo.cpp)
