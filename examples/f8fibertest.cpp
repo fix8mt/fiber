@@ -6,6 +6,7 @@
 #include <iostream>
 #include <iomanip>
 #include <thread>
+#include <functional>
 
 #include <fix8/f8fiber.hpp>
 
