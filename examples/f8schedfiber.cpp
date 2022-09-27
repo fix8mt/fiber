@@ -7,10 +7,12 @@
 // CC=gcc CXX="g++ -ggdb" CXXFLAGS=-O0 -DCMAKE_BUILD_TYPE=Debug cmake ..
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
+using namespace std::literals;
 
 //-----------------------------------------------------------------------------------------
 void doit(int arg)
 {
+	this_fiber::name(("sub"s + std::to_string(arg)).c_str());
 	std::cout << "\tstarting " << arg << '\n';
 	for (int ii{}; ii < arg; )
 	{
@@ -22,16 +24,20 @@ void doit(int arg)
 
 struct foo
 {
-	void sub(int arg) { doit(arg); }
+	void sub(int arg)
+	{
+		doit(arg);
+	}
 	void sub1(int arg, const char *str)
 	{
 		std::cout << str << '\n';
 		doit(arg);
-	fibers::print(std::cout);
 	}
 	void sub3(int arg, const char *str)
 	{
-		using namespace std::literals;
+		auto st { "sub"s + std::to_string(arg) };
+		//std::cout << st << '\n';
+		this_fiber::name(st.c_str());
 		std::cout << "\tsub2 starting " << arg << '\n';
 		for (int ii{}; ii < arg; )
 		{
@@ -41,7 +47,10 @@ struct foo
 		}
 		std::cout << "\tsub2 leaving " << arg << '\n';
 	}
-	void sub2() { doit(4); }
+	void sub2()
+	{
+		doit(4);
+	}
 };
 
 //-----------------------------------------------------------------------------------------
@@ -52,6 +61,7 @@ int main(void)
 		sub_co4(std::bind(&foo::sub3, &bar, 12, "there"), 32767);
 	f8_sched_fiber sub_lam([](int arg)
 	{
+		this_fiber::name("sub lambda");
 		std::cout << "\tlam starting " << arg << '\n';
 		for (int ii{}; ii < arg; )
 		{
@@ -64,10 +74,14 @@ int main(void)
 	for (int ii{}; fibers::has_fibers(); ++ii)
 	{
 		if (ii == 0)
+		{
+			fibers::print(std::cout);
 			this_fiber::yield(sub_co3.get_id());
+			fibers::print(std::cout);
+		}
 		this_fiber::yield();
 		std::cout << "main: " << ii << '\n';
-		//fibers::print(std::cout);
+		fibers::print(std::cout);
 	}
 	std::cout << "Exiting from main\n";
 	std::cout << sizeof(f8_sched_fiber) << '\n';

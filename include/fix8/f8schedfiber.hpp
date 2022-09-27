@@ -41,6 +41,7 @@
 #include <deque>
 #include <chrono>
 #include <algorithm>
+#include <cstring>
 #include <functional>
 #include <stdexcept>
 #include <bitset>
@@ -49,8 +50,11 @@
 #include <set>
 
 //-----------------------------------------------------------------------------------------
-#if !defined (SIGSTKSZ)
+#if !defined SIGSTKSZ
 # define SIGSTKSZ 131072 // 128kb recommended
+#endif
+#if !defined FIBERNAMELEN
+# define FIBERNAMELEN 16 // including null terminator
 #endif
 
 //-----------------------------------------------------------------------------------------
@@ -151,8 +155,10 @@ class alignas(16) f8_sched_fiber
 {
 	enum f8_fiber_flags { main, finished, suspended, dispatched, detached, count };
 
-	uint64_t *_stk; // top of f8_sched_fiber stack
-	uint64_t *_stk_alloc; // allocated stack memory
+	uintptr_t *_stk; // top of f8_sched_fiber stack
+	const uintptr_t _stacksz;
+	uintptr_t *_stk_alloc{}; // allocated stack memory
+	const char *_name;
 	std::bitset<f8_fiber_flags::count> _flags;
 	std::chrono::steady_clock::time_point _tp{};
 	std::condition_variable _cv_join;
@@ -191,7 +197,6 @@ class alignas(16) f8_sched_fiber
 			_func();
 			auto& [un, sch, cur] { get_vars() };
 			cur->_flags.set(f8_fiber_flags::finished);
-			std::cout << "exec() after func\n";
 			if (!sch.empty())
 				f8_this_fiber::yield();
 			f8_sched_fiber_exit();
@@ -205,7 +210,7 @@ class alignas(16) f8_sched_fiber
 	static void _coroswitch(f8_sched_fiber *old, f8_sched_fiber *newer) noexcept;
 
 	// default current (main) f8_sched_fiber
-	f8_sched_fiber() noexcept : _stk_alloc{}, _flags(1 << f8_fiber_flags::main) {}
+	f8_sched_fiber() noexcept : _stacksz{}, _name{"main"}, _flags{1 << f8_fiber_flags::main} {}
 
 public:
 	template<typename Fn, typename... Args, std::enable_if_t<!std::is_bind_expression_v<Fn>,int> = 0>
@@ -222,11 +227,12 @@ public:
 
 	template<typename Fn, typename Wrapper = callable_wrapper<Fn>>
 	f8_sched_fiber(launch policy, Fn&& func, size_t stacksz=SIGSTKSZ)
-		: _stk_alloc(new uint64_t[stacksz / sizeof(uint64_t)])
+		: _stacksz(stacksz & ~static_cast<uintptr_t>(0xff)), _stk_alloc(new uintptr_t[_stacksz / sizeof(uintptr_t)])
 	{
-		_stk = _stk_alloc + stacksz / sizeof(uint64_t) - 1; // top of stack
-		*--_stk = reinterpret_cast<uint64_t>(jumper<Wrapper>);
-		*--_stk = reinterpret_cast<uint64_t>(new (_stk_alloc) callable_wrapper(std::forward<Fn>(func))); // store at bottom of stack
+		_stk = _stk_alloc + _stacksz / sizeof(uintptr_t) - 1; // top of stack
+		*--_stk = reinterpret_cast<uintptr_t>(jumper<Wrapper>);
+		*--_stk = reinterpret_cast<uintptr_t>(new (reinterpret_cast<char*>(_stk_alloc)) callable_wrapper(std::forward<Fn>(func))); // store at bottom of stack
+		_name = new (reinterpret_cast<char*>(_stk_alloc) + sizeof(callable_wrapper<Fn>)) char[FIBERNAMELEN]{}; // place optional name in stack
 		std::fill(_stk -= 7, _stk, 0x0);
 		auto& [un, sch, cur] { get_vars() };
 		un.insert(this);
@@ -251,7 +257,7 @@ public:
 		}
 	}
 
-	f8_sched_fiber(f8_sched_fiber&& other) noexcept
+	f8_sched_fiber(f8_sched_fiber&& other) noexcept : _stacksz{other._stacksz}
 	{
 		swap(other);
 		other.detach();
@@ -296,6 +302,15 @@ public:
 				"f8_sched_fiber: fiber not joinable" };
 	}
 
+	const char *name(const char *what=nullptr)
+	{
+		if (what && !_flags[f8_fiber_flags::main]) // you can't name main
+		{
+			const size_t len { std::strlen(what) }	;
+			std::memcpy(const_cast<char*>(_name), what, len + 1 > FIBERNAMELEN ? FIBERNAMELEN - 1 : len);
+		}
+		return _name;
+	}
 	void swap(f8_sched_fiber& other)
 	{
 		if (this != &other)
@@ -319,8 +334,12 @@ public:
 	{
 		return os << std::hex << &what << ' ' << std::left << std::setw(5)
 			<< (&what == f8_sched_fiber::get_vars()._curr ? '*' : ' ')
-			<< std::left << std::setw(15) << what.get_id() << ' ' << std::setw(14) << what._stk
-			<< ' ' << std::setw(14) << what._stk_alloc << ' ' << what._flags;
+			<< std::left << std::setw(15) << what.get_id()
+			<< ' ' << std::setw(14) << what._stk
+			<< ' ' << std::setw(14) << what._stk_alloc
+			<< ' ' << std::right << std::setw(8) << what._stacksz
+			<< ' ' << what._flags << std::right
+			<< std::setw(16) << what._name << " (" << reinterpret_cast<const void*>(what._name) << ')';
 	}
 	friend f8_this_fiber;
 	friend f8_fibers;
@@ -426,9 +445,18 @@ void f8_this_fiber::yield(f8_fiber_id id) noexcept
 	auto& [un, sch, cur] { f8_sched_fiber::get_vars() };
 	if (auto *fbr { static_cast<f8_sched_fiber*>(const_cast<void*>(id._ptr)) }; cur != fbr && un.count(fbr))
 	{
-		std::swap(fbr, cur);
-		sch.push_back(fbr);
-		f8_sched_fiber::_coroswitch(fbr, cur);
+		if (auto& front { sch.front() }; front != fbr)
+		{
+			for (auto itr { sch.begin() }; itr != sch.end(); ++itr)
+			{
+				if (*itr == fbr)
+				{
+					std::swap(*itr, front); // swap next with specified fiber
+					break;
+				}
+			}
+		}
+		yield();
 	}
 }
 template<typename Clock, typename Duration>
@@ -448,7 +476,6 @@ void f8_this_fiber::sleep_for(std::chrono::duration<Rep, Period> const& rel_time
 	yield();
 }
 f8_sched_fiber& f8_this_fiber::get() noexcept { return *f8_sched_fiber::get_vars()._curr; }
-
 //-----------------------------------------------------------------------------------------
 int f8_fibers::size() noexcept { return f8_sched_fiber::get_vars()._sched.size(); }
 int f8_fibers::size_ready() noexcept
@@ -464,14 +491,12 @@ bool f8_fibers::has_fibers() noexcept { return size(); }
 bool f8_fibers::has_ready_fibers() noexcept { return size_ready(); }
 void f8_fibers::print(std::ostream& os) noexcept
 {
-	os << "#  address        this fiber id        stack ptr      stack alloc    flags\n";
+	os << "#  address        this fiber id        stack ptr      stack alloc     stacksz flags            name \n";
 	int pos{};
 	auto& [un, sch, cur] { f8_sched_fiber::get_vars() };
-	if (un.count(cur))
-		os << std::left << std::setw(3) << pos++ << cur << std::endl;
+	os << std::left << std::setw(3) << pos++ << *cur << std::endl;
 	for (const auto& pp : sch)
-		if (un.count(pp))
-			os << std::left << std::setw(3) << pos++ << *pp << std::endl;
+		os << std::left << std::setw(3) << pos++ << *pp << std::endl;
 }
 
 //-----------------------------------------------------------------------------------------
@@ -482,6 +507,7 @@ namespace this_fiber
 	inline void yield() noexcept { return f8_this_fiber::yield(); }
 	inline void yield(f8_fiber_id id) noexcept { return f8_this_fiber::yield(id); }
 	inline f8_sched_fiber& get() noexcept { return f8_this_fiber::get(); }
+	inline const char *name(const char *what=nullptr) noexcept { return f8_this_fiber::get().name(what); }
 
 	template<typename Clock, typename Duration>
 	inline void sleep_until(std::chrono::time_point<Clock, Duration> const& sleep_time)
