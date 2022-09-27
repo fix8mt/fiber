@@ -112,6 +112,7 @@ class f8_this_fiber : protected f8_nonconstructible
 public:
 	static f8_fiber_id get_id() noexcept;
 	static class f8_sched_fiber& get() noexcept;
+	static class f8_sched_fiber& get(f8_fiber_id id);
 	static void yield() noexcept;
 	static void yield(f8_fiber_id id) noexcept;
 	template<typename Clock, typename Duration>
@@ -232,7 +233,7 @@ public:
 		_stk = _stk_alloc + _stacksz / sizeof(uintptr_t) - 1; // top of stack
 		*--_stk = reinterpret_cast<uintptr_t>(jumper<Wrapper>);
 		*--_stk = reinterpret_cast<uintptr_t>(new (reinterpret_cast<char*>(_stk_alloc)) callable_wrapper(std::forward<Fn>(func))); // store at bottom of stack
-		_name = new (reinterpret_cast<char*>(_stk_alloc) + sizeof(callable_wrapper<Fn>)) char[FIBERNAMELEN]{}; // place optional name in stack
+		_name = new (reinterpret_cast<char*>(_stk_alloc) + sizeof(callable_wrapper<Fn>)) char[FIBERNAMELEN]; // place optional name in stack
 		std::fill(_stk -= 7, _stk, 0x0);
 		auto& [un, sch, cur] { get_vars() };
 		un.insert(this);
@@ -308,6 +309,7 @@ public:
 		{
 			const size_t len { std::strlen(what) }	;
 			std::memcpy(const_cast<char*>(_name), what, len + 1 > FIBERNAMELEN ? FIBERNAMELEN - 1 : len);
+			const_cast<char*>(_name)[len] = 0;
 		}
 		return _name;
 	}
@@ -338,8 +340,7 @@ public:
 			<< ' ' << std::setw(14) << what._stk
 			<< ' ' << std::setw(14) << what._stk_alloc
 			<< ' ' << std::right << std::setw(8) << what._stacksz
-			<< ' ' << what._flags << std::right
-			<< std::setw(16) << what._name << " (" << reinterpret_cast<const void*>(what._name) << ')';
+			<< ' ' << what._flags << ' ' << what._name; // << " (" << reinterpret_cast<const void*>(what._name) << ')';
 	}
 	friend f8_this_fiber;
 	friend f8_fibers;
@@ -476,6 +477,14 @@ void f8_this_fiber::sleep_for(std::chrono::duration<Rep, Period> const& rel_time
 	yield();
 }
 f8_sched_fiber& f8_this_fiber::get() noexcept { return *f8_sched_fiber::get_vars()._curr; }
+f8_sched_fiber& f8_this_fiber::get(f8_fiber_id id)
+{
+	auto& un { f8_sched_fiber::get_vars()._uniq };
+	if (auto *fbr { static_cast<f8_sched_fiber*>(const_cast<void*>(id._ptr)) }; un.count(fbr))
+		return *fbr;
+	throw fiber_error { std::make_error_code(std::errc::invalid_argument),
+		"f8_sched_fiber: unknown fiber" };
+}
 //-----------------------------------------------------------------------------------------
 int f8_fibers::size() noexcept { return f8_sched_fiber::get_vars()._sched.size(); }
 int f8_fibers::size_ready() noexcept
@@ -491,7 +500,7 @@ bool f8_fibers::has_fibers() noexcept { return size(); }
 bool f8_fibers::has_ready_fibers() noexcept { return size_ready(); }
 void f8_fibers::print(std::ostream& os) noexcept
 {
-	os << "#  address        this fiber id        stack ptr      stack alloc     stacksz flags            name \n";
+	os << "#  address        this fiber id        stack ptr      stack alloc     stacksz flags name \n";
 	int pos{};
 	auto& [un, sch, cur] { f8_sched_fiber::get_vars() };
 	os << std::left << std::setw(3) << pos++ << *cur << std::endl;
@@ -507,6 +516,7 @@ namespace this_fiber
 	inline void yield() noexcept { return f8_this_fiber::yield(); }
 	inline void yield(f8_fiber_id id) noexcept { return f8_this_fiber::yield(id); }
 	inline f8_sched_fiber& get() noexcept { return f8_this_fiber::get(); }
+	inline f8_sched_fiber& get(f8_fiber_id id) { return f8_this_fiber::get(id); }
 	inline const char *name(const char *what=nullptr) noexcept { return f8_this_fiber::get().name(what); }
 
 	template<typename Clock, typename Duration>

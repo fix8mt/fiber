@@ -81,7 +81,7 @@ int main(void)
 		}
 		this_fiber::yield();
 		std::cout << "main: " << ii << '\n';
-		fibers::print(std::cout);
+		//fibers::print(std::cout);
 	}
 	std::cout << "Exiting from main\n";
 	std::cout << sizeof(f8_sched_fiber) << '\n';
