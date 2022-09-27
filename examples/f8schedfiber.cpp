@@ -27,6 +27,7 @@ struct foo
 	{
 		std::cout << str << '\n';
 		doit(arg);
+	fibers::print(std::cout);
 	}
 	void sub3(int arg, const char *str)
 	{
@@ -40,15 +41,15 @@ struct foo
 		}
 		std::cout << "\tsub2 leaving " << arg << '\n';
 	}
-	void sub2() { doit(3); }
+	void sub2() { doit(4); }
 };
 
 //-----------------------------------------------------------------------------------------
 int main(void)
 {
 	foo bar;
-	f8_sched_fiber sub_co(&doit, 5), sub_co1(&foo::sub2, &bar), sub_co2(&foo::sub, &bar, 8), sub_co3(&foo::sub1, &bar, 12., "hello"),
-		sub_co4(std::bind(&foo::sub3, &bar, 15, "there"), 32767);
+	f8_sched_fiber sub_co(&doit, 3), sub_co1(&foo::sub2, &bar), sub_co2(&foo::sub, &bar, 5), sub_co3(&foo::sub1, &bar, 8., "hello"),
+		sub_co4(std::bind(&foo::sub3, &bar, 12, "there"), 32767);
 	f8_sched_fiber sub_lam([](int arg)
 	{
 		std::cout << "\tlam starting " << arg << '\n';
@@ -58,10 +59,12 @@ int main(void)
 			this_fiber::yield();
 		}
 		std::cout << "\tlam leaving " << arg << '\n';
-	}, 18);
+	}, 15);
 	fibers::print(std::cout);
 	for (int ii{}; fibers::has_fibers(); ++ii)
 	{
+		if (ii == 0)
+			this_fiber::yield(sub_co3.get_id());
 		this_fiber::yield();
 		std::cout << "main: " << ii << '\n';
 		//fibers::print(std::cout);

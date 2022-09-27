@@ -27,7 +27,6 @@ int main(void)
 	{
 		foo bar;
 		std::future<int> myfuture { async(launch::dispatch, &foo::sub, &bar, 10) };
-		std::cout << "Exiting from main\n";
 		std::cout << "Future result = " << myfuture.get() << '\n';
 		fibers::print(std::cout);
 	}
@@ -35,5 +34,6 @@ int main(void)
 	{
 		std::cerr << "Exception: " << e.what() << '(' << e.code() << ")\n";
 	}
+	std::cout << "Exiting from main\n";
 	return 0;
 }
