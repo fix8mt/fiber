@@ -12,45 +12,48 @@ using namespace FIX8;
 
 void print_a()
 {
-	printf("a");
+	std::cout << "a";
 	this_fiber::yield();
 }
 
 void print_b()
 {
-	printf("b");
-	std::thread j([]() { printf("N"); });
+	std::cout << "b";
+	std::thread j([]() { std::cout << "B"; });
 	j.detach();
 	this_fiber::yield();
 }
 
-int test()
+int main()
 {
-	f8_sched_fiber([]()
+	int i = 0;
+	f8_sched_fiber([&]()
 	{
+		this_fiber::name("first");
 		do
 		{
 			print_a();
+			i++;
 		}
-		while (true);
+		while (i < 20);
 	}).detach();
 
-	f8_sched_fiber([]()
+	f8_sched_fiber([&]()
 	{
+		this_fiber::name("second");
 		do
 		{
+			i++;
 			print_b();
 		}
-		while (true);
+		while (i < 20);
 	}).detach();
 
-	printf("xxxx");
-
+	//fibers::print(std::cout);
+	std::cout << "X";
 	return 0;
 }
 
-int main()
-{
-	test();
-	return 0;
-}
+// XababBabBabBababBBabBabBabBabBB
+// XababBabBabBabBabBabBabaBbBabBB
+// XababBabBabBabBabBabBabBabBabBB

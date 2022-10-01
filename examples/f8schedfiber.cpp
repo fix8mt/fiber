@@ -12,7 +12,7 @@ using namespace std::literals;
 //-----------------------------------------------------------------------------------------
 void doit(int arg)
 {
-	this_fiber::name(("sub"s + std::to_string(arg)).c_str());
+	std::cout << this_fiber::name(("sub"s + std::to_string(arg)).c_str());
 	std::cout << "\tstarting " << arg << '\n';
 	for (int ii{}; ii < arg; )
 	{
@@ -20,6 +20,7 @@ void doit(int arg)
 		this_fiber::yield();
 	}
 	std::cout << "\tleaving " << arg << '\n';
+	fibers::print();
 }
 
 struct foo
@@ -70,20 +71,21 @@ int main(void)
 		}
 		std::cout << "\tlam leaving " << arg << '\n';
 	}, 15);
-	fibers::print(std::cout);
+	fibers::print();
 	for (int ii{}; fibers::has_fibers(); ++ii)
 	{
-		if (ii == 0)
+		/*if (ii == 0)
 		{
 			fibers::print(std::cout);
 			this_fiber::yield(sub_co3.get_id());
 			fibers::print(std::cout);
-		}
+		}*/
 		this_fiber::yield();
 		std::cout << "main: " << ii << '\n';
 		//fibers::print(std::cout);
 	}
 	std::cout << "Exiting from main\n";
 	std::cout << sizeof(f8_sched_fiber) << '\n';
+	std::cout << sizeof(f8_fiber_base) << '\n';
 	return 0;
 }

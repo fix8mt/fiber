@@ -111,8 +111,9 @@ class f8_this_fiber : protected f8_nonconstructible
 {
 public:
 	static f8_fiber_id get_id() noexcept;
-	static class f8_sched_fiber& get() noexcept;
-	static class f8_sched_fiber& get(f8_fiber_id id);
+	static class f8_fiber_base& get() noexcept;
+	static class f8_fiber_base& get(f8_fiber_id id);
+	static const char *name(const char *what=nullptr) noexcept;
 	static void yield() noexcept;
 	static void yield(f8_fiber_id id) noexcept;
 	template<typename Clock, typename Duration>
@@ -152,206 +153,83 @@ template<typename T>
 inline constexpr bool is_launch_policy_v = is_launch_policy<T>::value; // C++14 enhancement
 
 //-----------------------------------------------------------------------------------------
-class alignas(16) f8_sched_fiber
-{
-	enum f8_fiber_flags { main, finished, suspended, dispatched, detached, count };
+enum f8_fiber_flags { main, finished, suspended, dispatched, detached, count };
 
+//-----------------------------------------------------------------------------------------
+class alignas(16) f8_fiber_base
+{
 	uintptr_t *_stk; // top of f8_sched_fiber stack
 	const uintptr_t _stacksz;
 	uintptr_t *_stk_alloc{}; // allocated stack memory
-	const char *_name;
+	const char _name[FIBERNAMELEN]{};
 	std::bitset<f8_fiber_flags::count> _flags;
 	std::chrono::steady_clock::time_point _tp{};
 	std::condition_variable _cv_join;
 	std::mutex _join_mutex;
 
-	struct cvars
-	{
-		std::set<f8_sched_fiber *> _uniq;
-		std::deque<f8_sched_fiber *> _sched;
-		f8_sched_fiber *_curr;
-	};
-	static cvars& get_vars() noexcept
-	{
-		static thread_local f8_sched_fiber _def_fiber;
-		static thread_local cvars _cvars{._uniq={&_def_fiber},._curr=&_def_fiber};
-		return _cvars;
-	}
-
-	static void f8_sched_fiber_exit()
-	{
-		std::cout << "f8_sched_fiber has exited. Terminating application.\n";
-		std::terminate();
-	}
-
-	template<typename Fn>
-	class callable_wrapper
-	{
-		typename std::decay_t<Fn> _func;
-
-	public:
-		callable_wrapper(Fn&& func) noexcept : _func(std::forward<Fn>(func)) {}
-		~callable_wrapper() = default;
-
-		void exec()
-		{
-			_func();
-			auto& [un, sch, cur] { get_vars() };
-			cur->_flags.set(f8_fiber_flags::finished);
-			if (!sch.empty())
-				f8_this_fiber::yield();
-			f8_sched_fiber_exit();
-		}
-	};
-
 	template<typename Wrapper>
-	static void jumper(void *ptr) { static_cast<Wrapper*>(ptr)->exec(); }
+	static void jumper(void *ptr) noexcept;
 
 	// asm stack switch routine
-	static void _coroswitch(f8_sched_fiber *old, f8_sched_fiber *newer) noexcept;
+	static void _coroswitch(f8_fiber_base *old, f8_fiber_base *newer) noexcept;
 
-	// default current (main) f8_sched_fiber
-	f8_sched_fiber() noexcept : _stacksz{}, _name{"main"}, _flags{1 << f8_fiber_flags::main} {}
-
-public:
-	template<typename Fn, typename... Args, std::enable_if_t<!std::is_bind_expression_v<Fn>,int> = 0>
-	f8_sched_fiber(Fn&& func, Args&&... args)
-		: f8_sched_fiber(launch::post, std::bind(std::forward<Fn>(func), std::forward<Args>(args)...)) {}
-
-	template<typename Fn, typename... Args, std::enable_if_t<!std::is_bind_expression_v<Fn>,int> = 0>
-	f8_sched_fiber(launch policy, Fn&& func, Args&&... args)
-		: f8_sched_fiber(policy, std::bind(std::forward<Fn>(func), std::forward<Args>(args)...)) {}
+	static void destroy(f8_fiber_base *pp)
+	{
+		pp->~f8_fiber_base();
+		delete[] reinterpret_cast<uintptr_t*>(pp);
+	}
 
 	template<typename Fn>
-	f8_sched_fiber(Fn&& func, size_t stacksz=SIGSTKSZ)
-		: f8_sched_fiber(launch::post, std::forward<Fn>(func), stacksz) {}
+	struct callable_wrapper
+	{
+		typename std::decay_t<Fn> _func;
+		callable_wrapper(Fn&& func) noexcept : _func(std::forward<Fn>(func)) {}
+		void exec() { _func(); }
+	};
 
-	template<typename Fn, typename Wrapper = callable_wrapper<Fn>>
-	f8_sched_fiber(launch policy, Fn&& func, size_t stacksz=SIGSTKSZ)
-		: _stacksz(stacksz & ~static_cast<uintptr_t>(0xff)), _stk_alloc(new uintptr_t[_stacksz / sizeof(uintptr_t)])
+public:
+	f8_fiber_base() noexcept : _stacksz{}, _name{"main"}, _flags{1 << f8_fiber_flags::main} {}
+
+	template<typename Fn>
+	f8_fiber_base(launch policy, Fn&& func, uintptr_t *sp, size_t stacksz) noexcept : _stacksz(stacksz), _stk_alloc(sp)
 	{
 		_stk = _stk_alloc + _stacksz / sizeof(uintptr_t) - 1; // top of stack
-		*--_stk = reinterpret_cast<uintptr_t>(jumper<Wrapper>);
-		*--_stk = reinterpret_cast<uintptr_t>(new (reinterpret_cast<char*>(_stk_alloc)) callable_wrapper(std::forward<Fn>(func))); // store at bottom of stack
-		_name = new (reinterpret_cast<char*>(_stk_alloc) + sizeof(callable_wrapper<Fn>)) char[FIBERNAMELEN]; // place optional name in stack
+		*--_stk = reinterpret_cast<uintptr_t>(jumper<callable_wrapper<Fn>>);
+		*--_stk = reinterpret_cast<uintptr_t>(new (reinterpret_cast<char*>(_stk_alloc) + sizeof(f8_fiber_base))
+			callable_wrapper(std::forward<Fn>(func))); // store at bottom of stack
 		std::fill(_stk -= 7, _stk, 0x0);
-		auto& [un, sch, cur] { get_vars() };
-		un.insert(this);
-		sch.push_back(this);
 		if (policy == launch::dispatch)
-		{
 			_flags.set(f8_fiber_flags::dispatched);
-			f8_this_fiber::yield();
-		}
 	}
+	~f8_fiber_base() noexcept {}
 
-	f8_sched_fiber(const f8_sched_fiber&) = delete;
-	f8_sched_fiber& operator=(const f8_sched_fiber&) = delete;
-
-	~f8_sched_fiber()
-	{
-		if (!_flags[f8_fiber_flags::main])
-		{
-			delete[] _stk_alloc;
-			if (joinable())
-				f8_sched_fiber_exit();
-		}
-	}
-
-	f8_sched_fiber(f8_sched_fiber&& other) noexcept : _stacksz{other._stacksz}
-	{
-		swap(other);
-		other.detach();
-	}
-	f8_sched_fiber& operator=(f8_sched_fiber&& other) noexcept
-	{
-		if (joinable())
-			std::terminate();
-		if (this != &other)
-			swap(other);
-		return *this;
-	}
-
-	void join()
-	{
-		if (auto& cur { get_vars()._curr }; this != cur)
-		{
-			if (!joinable())
-				throw fiber_error { std::make_error_code(std::errc::invalid_argument),
-					"f8_sched_fiber: fiber not joinable" };
-			else
-			{
-				std::unique_lock jlock(_join_mutex);
-				_cv_join.wait(jlock, [this]{ return !joinable();});
-			}
-		}
-		else
-			throw fiber_error { std::make_error_code(std::errc::resource_deadlock_would_occur),
-				"f8_sched_fiber: fiber cannot self-join" };
-	}
-
-	bool joinable() const noexcept { return !_flags[f8_fiber_flags::finished]; };
-	void detach()
-	{
-		if (joinable())
-		{
-			_flags.set(f8_fiber_flags::detached);
-			get_vars()._uniq.erase(this);
-		}
-		else
-			throw fiber_error { std::make_error_code(std::errc::invalid_argument),
-				"f8_sched_fiber: fiber not joinable" };
-	}
-
+	f8_fiber_id get_id() const noexcept { return f8_fiber_id(!_flags[f8_fiber_flags::main] ? this : nullptr); }
 	const char *name(const char *what=nullptr)
 	{
 		if (what && !_flags[f8_fiber_flags::main]) // you can't name main
 		{
-			const size_t len { std::strlen(what) }	;
-			std::memcpy(const_cast<char*>(_name), what, len + 1 > FIBERNAMELEN ? FIBERNAMELEN - 1 : len);
-			const_cast<char*>(_name)[len] = 0;
+			const size_t len { std::strlen(what) }, adjlen { len + 1 > FIBERNAMELEN ? FIBERNAMELEN - 1 : len };
+			char *ptr { const_cast<char*>(&_name[0]) };
+			std::memcpy(ptr, what, adjlen);
+			*(ptr + adjlen) = 0;
 		}
 		return _name;
 	}
-	void swap(f8_sched_fiber& other)
-	{
-		if (this != &other)
-		{
-			std::swap(_stk, other._stk);
-			std::swap(_stk_alloc, other._stk_alloc);
-			std::swap(_flags, other._flags);
-			std::swap(_tp, other._tp);
-		}
-	}
 
-	static void swap(f8_sched_fiber& first, f8_sched_fiber& second) { first.swap(second); }
-
-	explicit operator bool() const noexcept { return joinable(); }
-	bool operator! () const noexcept { return !joinable(); }
-
-	launch get_policy() const noexcept { return _flags[f8_fiber_flags::dispatched] ? launch::dispatch : launch::post; }
-	f8_fiber_id get_id() const noexcept { return f8_fiber_id(!_flags[f8_fiber_flags::main] ? this : nullptr); }
-
-	friend std::ostream& operator<<(std::ostream& os, const f8_sched_fiber& what)
-	{
-		return os << std::hex << &what << ' ' << std::left << std::setw(5)
-			<< (&what == f8_sched_fiber::get_vars()._curr ? '*' : ' ')
-			<< std::left << std::setw(15) << what.get_id()
-			<< ' ' << std::setw(14) << what._stk
-			<< ' ' << std::setw(14) << what._stk_alloc
-			<< ' ' << std::right << std::setw(8) << what._stacksz
-			<< ' ' << what._flags << ' ' << what._name; // << " (" << reinterpret_cast<const void*>(what._name) << ')';
-	}
+	friend std::ostream& operator<<(std::ostream& os, const f8_fiber_base& what);
+	friend class f8_sched_fiber;
 	friend f8_this_fiber;
 	friend f8_fibers;
 };
 
+using f8_fiber_base_ptr = std::shared_ptr<f8_fiber_base>;
+
 //-----------------------------------------------------------------------------------------
-// static void f8_sched_fiber::_coroswitch(f8_sched_fiber *old, f8_sched_fiber *newer) noexcept;
+// static void f8_fiber_base::_coroswitch(f8_fiber_base *old, f8_fiber_base *newer) noexcept;
 asm(R"(.text
 .align 16
-.type _ZN4FIX814f8_sched_fiber11_coroswitchEPS0_S1_,@function
-_ZN4FIX814f8_sched_fiber11_coroswitchEPS0_S1_:
+.type _ZN4FIX813f8_fiber_base11_coroswitchEPS0_S1_,@function
+_ZN4FIX813f8_fiber_base11_coroswitchEPS0_S1_:
 	subq $0x40,%rsp
    stmxcsr (%rsp)
    fnstcw  4(%rsp)
@@ -378,8 +256,179 @@ _ZN4FIX814f8_sched_fiber11_coroswitchEPS0_S1_:
 	movq 8*8(%rsp),%r8
 	addq $0x48,%rsp
    jmp *%r8
-.size _ZN4FIX814f8_sched_fiber11_coroswitchEPS0_S1_,.-_ZN4FIX814f8_sched_fiber11_coroswitchEPS0_S1_
+.size _ZN4FIX813f8_fiber_base11_coroswitchEPS0_S1_,.-_ZN4FIX813f8_fiber_base11_coroswitchEPS0_S1_
 )");
+
+//-----------------------------------------------------------------------------------------
+class alignas(16) f8_sched_fiber
+{
+	f8_fiber_base_ptr _ctx;
+
+#define GetVars() auto& [un, det, sch, cur, trm] { f8_sched_fiber::get_vars() }
+#define GetVar(x) f8_sched_fiber::get_vars().x
+
+	struct cvars
+	{
+		std::set<f8_fiber_base_ptr> _uniq, _det;
+		std::deque<f8_fiber_base_ptr> _sched;
+		f8_fiber_base_ptr _curr;
+		bool _term;
+		~cvars() noexcept;
+	};
+	static cvars& get_vars() noexcept
+	{
+		static thread_local f8_fiber_base_ptr _def_ctx { std::make_shared<f8_fiber_base>() };
+		static thread_local cvars _cvars{._uniq={_def_ctx},._curr=_def_ctx,._term=false};
+		return _cvars;
+	}
+
+	static void f8_sched_fiber_exit()
+	{
+		std::cout << "f8_sched_fiber has exited. Terminating application.\n";
+		std::terminate();
+	}
+
+	// default current (main) f8_sched_fiber
+	f8_sched_fiber() noexcept : _ctx { std::make_shared<f8_fiber_base>() } {}
+	f8_sched_fiber(f8_fiber_base_ptr from) : _ctx(from) {}
+
+public:
+	template<typename Fn, typename... Args, std::enable_if_t<!std::is_bind_expression_v<Fn>,int> = 0>
+	f8_sched_fiber(Fn&& func, Args&&... args)
+		: f8_sched_fiber(launch::post, std::bind(std::forward<Fn>(func), std::forward<Args>(args)...)) {}
+
+	template<typename Fn, typename... Args, std::enable_if_t<!std::is_bind_expression_v<Fn>,int> = 0>
+	f8_sched_fiber(launch policy, Fn&& func, Args&&... args)
+		: f8_sched_fiber(policy, std::bind(std::forward<Fn>(func), std::forward<Args>(args)...)) {}
+
+	template<typename Fn>
+	f8_sched_fiber(Fn&& func, size_t stacksz=SIGSTKSZ)
+		: f8_sched_fiber(launch::post, std::forward<Fn>(func), stacksz) {}
+
+	template<typename Fn>
+	f8_sched_fiber(launch policy, Fn&& func, size_t stacksz=SIGSTKSZ)
+	{
+		const uintptr_t sz { (stacksz + sizeof(f8_fiber_base)) & ~static_cast<uintptr_t>(0xff) };
+		uintptr_t *sp { new uintptr_t[sz / sizeof(uintptr_t)] };
+		_ctx.reset(new (reinterpret_cast<char*>(sp))
+			f8_fiber_base(policy, std::forward<Fn>(func), sp, sz), [](auto *pp) { f8_fiber_base::destroy(pp); });
+		GetVars();
+		un.insert(_ctx);
+		sch.push_back(_ctx);
+		if (policy == launch::dispatch)
+		{
+			_ctx->_flags.set(f8_fiber_flags::dispatched);
+			f8_this_fiber::yield();
+		}
+	}
+
+	f8_sched_fiber(const f8_sched_fiber&) = delete;
+	f8_sched_fiber& operator=(const f8_sched_fiber&) = delete;
+
+	~f8_sched_fiber()
+	{
+		if (joinable() && !_ctx->_flags[f8_fiber_flags::detached])
+			f8_sched_fiber_exit();
+		_ctx.reset();
+	}
+
+	f8_sched_fiber(f8_sched_fiber&& other) noexcept
+	{
+		_ctx.swap(other._ctx);
+	}
+	f8_sched_fiber& operator=(f8_sched_fiber&& other) noexcept
+	{
+		if (joinable())
+			f8_sched_fiber_exit();
+		if (_ctx != other._ctx)
+			_ctx.swap(other._ctx);
+		return *this;
+	}
+
+	void join()
+	{
+		if (auto& cur { GetVar(_curr) }; _ctx != cur)
+		{
+			if (!joinable())
+				throw fiber_error { std::make_error_code(std::errc::invalid_argument),
+					"f8_sched_fiber: fiber not joinable" };
+			else
+			{
+				std::unique_lock jlock(_ctx->_join_mutex);
+				_ctx->_cv_join.wait(jlock, [this]{ return !joinable();});
+			}
+		}
+		else
+			throw fiber_error { std::make_error_code(std::errc::resource_deadlock_would_occur),
+				"f8_sched_fiber: fiber cannot self-join" };
+	}
+
+	bool joinable() const noexcept { return !_ctx->_flags[f8_fiber_flags::finished]; };
+	void detach()
+	{
+		if (joinable())
+		{
+			_ctx->_flags.set(f8_fiber_flags::detached);
+			GetVars();
+			det.emplace(_ctx);
+			auto csched { sch };
+			sch.clear();
+			for (auto& pp : csched)
+				if (pp != _ctx)
+					sch.push_back(_ctx);
+			//std::cout << "leaving detach\n";
+		}
+		else
+			throw fiber_error { std::make_error_code(std::errc::invalid_argument),
+				"f8_sched_fiber: fiber not joinable" };
+	}
+
+	const char *name(const char *what=nullptr) noexcept { return _ctx->name(what); }
+	void swap(f8_sched_fiber& other)
+	{
+		if (_ctx != other._ctx)
+			_ctx.swap(other._ctx);
+	}
+
+	static void swap(f8_sched_fiber& first, f8_sched_fiber& second) { first.swap(second); }
+
+	explicit operator bool() const noexcept { return joinable(); }
+	bool operator! () const noexcept { return !joinable(); }
+
+	launch get_policy() const noexcept { return _ctx->_flags[f8_fiber_flags::dispatched] ? launch::dispatch : launch::post; }
+	f8_fiber_id get_id() const noexcept { return _ctx->get_id(); }
+
+	friend std::ostream& operator<<(std::ostream& os, const f8_fiber_base& what);
+	friend std::ostream& operator<<(std::ostream& os, const f8_sched_fiber& what) { return os << *what._ctx; }
+	friend f8_this_fiber;
+	friend f8_fibers;
+	friend f8_fiber_base;
+};
+
+//-----------------------------------------------------------------------------------------
+template<typename Wrapper>
+void f8_fiber_base::jumper(void *ptr) noexcept
+{
+	static_cast<Wrapper*>(ptr)->exec();
+	GetVars();
+	cur->_flags.set(f8_fiber_flags::finished);
+	if (!sch.empty())
+		f8_this_fiber::yield();
+	//std::cout << '\n' << cur->name() << '\n';
+	//f8_fibers::print(std::cout);
+	f8_sched_fiber::f8_sched_fiber_exit();
+}
+
+//-----------------------------------------------------------------------------------------
+// Process per thread pending fibers at thread exit
+f8_sched_fiber::cvars::~cvars() noexcept
+{
+	for (auto pp : _det)
+		_sched.emplace_back(pp);
+	_det.clear();
+	_term = true;
+	f8_this_fiber::yield();
+}
 
 //-----------------------------------------------------------------------------------------
 // custom async, uses f8_sched_fiber, modified boost::fiber::async
@@ -408,22 +457,34 @@ async(launch policy, Fn&& fn, Args... args)
 }
 
 //-----------------------------------------------------------------------------------------
-f8_fiber_id f8_this_fiber::get_id() noexcept { return f8_sched_fiber::get_vars()._curr->get_id(); }
+std::ostream& operator<<(std::ostream& os, const f8_fiber_base& what)
+{
+	return os << std::hex << &what << ' ' << std::left << std::setw(5)
+		<< (&what == GetVar(_curr).get() ? '*' : ' ')
+		<< std::left << std::setw(15) << what.get_id()
+		<< ' ' << std::setw(14) << what._stk
+		<< ' ' << std::setw(14) << what._stk_alloc
+		<< ' ' << std::right << std::setw(8) << what._stacksz
+		<< ' ' << what._flags << ' ' << what._name; //  << " (" << reinterpret_cast<const void*>(what._name) << ')';
+}
+
+//-----------------------------------------------------------------------------------------
+f8_fiber_id f8_this_fiber::get_id() noexcept { return GetVar(_curr)->get_id(); }
 
 void f8_this_fiber::yield() noexcept
 {
-	auto& [un, sch, cur] { f8_sched_fiber::get_vars() };
+	GetVars();
 	while (!sch.empty())
 	{
 		auto& front { sch.front() };
 		sch.pop_front();
-		if (!front->_flags[f8_sched_fiber::f8_fiber_flags::finished] && un.count(front))
+		if (!front->_flags[f8_fiber_flags::finished] && un.count(front))
 		{
-			if (front->_flags[f8_sched_fiber::f8_fiber_flags::suspended])
+			if (front->_flags[f8_fiber_flags::suspended])
 			{
 				if (front->_tp < std::chrono::steady_clock::now())
 				{
-					front->_flags.reset(f8_sched_fiber::f8_fiber_flags::suspended);
+					front->_flags.reset(f8_fiber_flags::suspended);
 					front->_tp = decltype(front->_tp)();
 				}
 				else
@@ -432,19 +493,31 @@ void f8_this_fiber::yield() noexcept
 					continue;
 				}
 			}
-			std::swap(front, cur);
+			else if (front->_flags[f8_fiber_flags::main] && trm)
+			{
+				det.emplace(front);
+				continue;
+			}
+			front.swap(cur);
 			sch.push_back(front);
-			f8_sched_fiber::_coroswitch(front, cur);
+			f8_fiber_base::_coroswitch(front.get(), cur.get());
 			break;
 		}
 		else
 			un.erase(front);
 	}
+	if (trm && sch.empty() && !det.empty()) // switch back to main
+	{
+		//std::cout << "switch back to main: " << det.size() << '\n';
+		f8_fiber_base::_coroswitch(cur.get(), const_cast<f8_fiber_base_ptr&>(*det.begin()).get());
+		det.erase(det.begin());
+		//f8_fibers::print(std::cout);
+	}
 }
 void f8_this_fiber::yield(f8_fiber_id id) noexcept
 {
-	auto& [un, sch, cur] { f8_sched_fiber::get_vars() };
-	if (auto *fbr { static_cast<f8_sched_fiber*>(const_cast<void*>(id._ptr)) }; cur != fbr && un.count(fbr))
+	GetVars();
+	if (auto fbr { f8_fiber_base_ptr(reinterpret_cast<f8_fiber_base*>(const_cast<void*>(id._ptr))) }; cur != fbr && un.count(fbr))
 	{
 		if (auto& front { sch.front() }; front != fbr)
 		{
@@ -452,7 +525,7 @@ void f8_this_fiber::yield(f8_fiber_id id) noexcept
 			{
 				if (*itr == fbr)
 				{
-					std::swap(*itr, front); // swap next with specified fiber
+					itr->swap(front); // swap next with specified fiber
 					break;
 				}
 			}
@@ -463,37 +536,38 @@ void f8_this_fiber::yield(f8_fiber_id id) noexcept
 template<typename Clock, typename Duration>
 void f8_this_fiber::sleep_until(std::chrono::time_point<Clock, Duration> const& sleep_time)
 {
-	auto& cur { f8_sched_fiber::get_vars()._curr };
+	auto& cur { GetVar(_curr) };
 	cur->_tp = std::chrono::steady_clock::now() + (sleep_time - Clock::now());
-	cur->_flags.set(f8_sched_fiber::f8_fiber_flags::suspended);
+	cur->_flags.set(f8_fiber_flags::suspended);
 	yield();
 }
 template<typename Rep, typename Period>
 void f8_this_fiber::sleep_for(std::chrono::duration<Rep, Period> const& rel_time)
 {
-	auto& cur { f8_sched_fiber::get_vars()._curr };
+	auto& cur { GetVar(_curr) };
 	cur->_tp = std::chrono::steady_clock::now() + rel_time;
-	cur->_flags.set(f8_sched_fiber::f8_fiber_flags::suspended);
+	cur->_flags.set(f8_fiber_flags::suspended);
 	yield();
 }
-f8_sched_fiber& f8_this_fiber::get() noexcept { return *f8_sched_fiber::get_vars()._curr; }
-f8_sched_fiber& f8_this_fiber::get(f8_fiber_id id)
+f8_fiber_base& f8_this_fiber::get() noexcept { return *GetVar(_curr); }
+const char *f8_this_fiber::name(const char *what) noexcept { return f8_this_fiber::get().name(what); }
+f8_fiber_base& f8_this_fiber::get(f8_fiber_id id)
 {
-	auto& un { f8_sched_fiber::get_vars()._uniq };
-	if (auto *fbr { static_cast<f8_sched_fiber*>(const_cast<void*>(id._ptr)) }; un.count(fbr))
+	auto& un { GetVar(_uniq) };
+	if (auto fbr { f8_fiber_base_ptr(reinterpret_cast<f8_fiber_base*>(const_cast<void*>(id._ptr))) }; un.count(fbr))
 		return *fbr;
 	throw fiber_error { std::make_error_code(std::errc::invalid_argument),
 		"f8_sched_fiber: unknown fiber" };
 }
 //-----------------------------------------------------------------------------------------
-int f8_fibers::size() noexcept { return f8_sched_fiber::get_vars()._sched.size(); }
+int f8_fibers::size() noexcept { return GetVar(_sched).size(); }
 int f8_fibers::size_ready() noexcept
 {
-	auto& [un, sch, cur] { f8_sched_fiber::get_vars() };
-	return std::count_if(un.cbegin(), un.cend(), [&cur](f8_sched_fiber *pp)
+	GetVars();
+	return std::count_if(un.cbegin(), un.cend(), [&cur](auto& pp)
 	{
-		return pp != cur && !pp->_flags[f8_sched_fiber::f8_fiber_flags::suspended]
-			&& !pp->_flags[f8_sched_fiber::f8_fiber_flags::finished];
+		return pp != cur && !pp->_flags[f8_fiber_flags::suspended]
+			&& !pp->_flags[f8_fiber_flags::finished];
 	});
 }
 bool f8_fibers::has_fibers() noexcept { return size(); }
@@ -502,10 +576,13 @@ void f8_fibers::print(std::ostream& os) noexcept
 {
 	os << "#  address        this fiber id        stack ptr      stack alloc     stacksz flags name \n";
 	int pos{};
-	auto& [un, sch, cur] { f8_sched_fiber::get_vars() };
+	GetVars();
 	os << std::left << std::setw(3) << pos++ << *cur << std::endl;
 	for (const auto& pp : sch)
 		os << std::left << std::setw(3) << pos++ << *pp << std::endl;
+	pos = 0;
+	for (const auto& pp : det)
+		os << std::left << std::setw(3) << std::dec << --pos << *pp << std::endl;
 }
 
 //-----------------------------------------------------------------------------------------
@@ -515,9 +592,9 @@ namespace this_fiber
 	inline f8_fiber_id get_id() noexcept { return f8_this_fiber::get_id(); }
 	inline void yield() noexcept { return f8_this_fiber::yield(); }
 	inline void yield(f8_fiber_id id) noexcept { return f8_this_fiber::yield(id); }
-	inline f8_sched_fiber& get() noexcept { return f8_this_fiber::get(); }
-	inline f8_sched_fiber& get(f8_fiber_id id) { return f8_this_fiber::get(id); }
-	inline const char *name(const char *what=nullptr) noexcept { return f8_this_fiber::get().name(what); }
+	inline f8_fiber_base& get() noexcept { return f8_this_fiber::get(); }
+	inline f8_fiber_base& get(f8_fiber_id id) { return f8_this_fiber::get(id); }
+	inline const char *name(const char *what=nullptr) noexcept { return f8_this_fiber::name(what); }
 
 	template<typename Clock, typename Duration>
 	inline void sleep_until(std::chrono::time_point<Clock, Duration> const& sleep_time)
@@ -534,7 +611,7 @@ namespace fibers
 	inline int size_ready() noexcept { return f8_fibers::size_ready(); }
 	inline bool has_fibers() noexcept { return fibers::size(); }
 	inline bool has_ready_fibers() noexcept { return fibers::size_ready(); }
-	inline void print(std::ostream& os) noexcept { f8_fibers::print(os); }
+	inline void print(std::ostream& os=std::cout) noexcept { f8_fibers::print(os); }
 };
 
 } // namespace FIX8
