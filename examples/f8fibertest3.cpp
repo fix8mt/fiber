@@ -1,40 +1,49 @@
-//-----------------------------------------------------------------------------------------
-// f8_fiber (header only) based on boost::fiber, x86_64 / linux only / de-boosted
-// Modifications Copyright (C) 2022 Fix8 Market Technologies Pty Ltd
-// see https://github.com/fix8mt/f8fiber
-//-----------------------------------------------------------------------------------------
 #include <iostream>
-#include <iomanip>
-#include <thread>
-#include <string>
-
-//#define F8FIBER_USE_ASM_SOURCE
+#include <functional>
+#include <deque>
+#include <set>
+#include <future>
 #include <fix8/f8fiber.hpp>
-#include "f8fibertest3.hpp"
-
-//F8FIBER_ASM_SOURCE;
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
 
 //-----------------------------------------------------------------------------------------
-int main(int argc, char *argv[])
+struct foo
 {
-	bool flags{};
-	foo bar(argc > 1 ? std::stol(argv[1]) : 5);
-	//f8_fiber f0(std::bind(&foo::func, &bar, std::placeholders::_1, std::ref(flags)));
-	f8_fiber f0(&foo::func, &bar, std::placeholders::_1, std::ref(flags));
-	std::cout << "fiber id:" << f0.get_id() << '\n';
-	std::cout << "flags=" << std::boolalpha << flags << '\n';
-
-	for (int ii{}; f0; ++ii)
+	int sub(int arg)
 	{
-		std::cout << "main:" << ii << '\n';
-		f8_yield(f0);
-		std::cout << "main:" << ii << " (resumed)\n";
+		std::cout << "\tstarting " << arg << '\n';
+		for (int ii{}; ii < arg; )
+		{
+			std::cout << '\t' << arg << ": " << ++ii << '\n';
+			this_fiber::yield();
+		}
+		std::cout << "\tleaving " << arg << '\n';
+		return arg * 100;
 	}
-	std::cout << "flags=" << std::boolalpha << flags << '\n';
-	std::cout << "main:exit\n";
+};
+
+//-----------------------------------------------------------------------------------------
+int main(void)
+{
+	try
+	{
+		foo bar;
+		std::packaged_task<int(int)> task(std::bind(&foo::sub, &bar, std::placeholders::_1));
+		std::future<int> myfuture { task.get_future() };
+		f8_fiber sub_co(std::move(task), 10);
+		for (int ii{}; sub_co; )
+		{
+			std::cout << "main: " << ++ii << '\n';
+			this_fiber::yield();
+		}
+		std::cout << "Exiting from main\n";
+		std::cout << "Future result = " << myfuture.get() << '\n';
+	}
+	catch (const std::future_error& e)
+	{
+		std::cerr << "Exception: " << e.what() << '(' << e.code() << ")\n";
+	}
 	return 0;
 }
-

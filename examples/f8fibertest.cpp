@@ -1,91 +1,90 @@
-//-----------------------------------------------------------------------------------------
-// f8_fiber (header only) based on boost::fiber, x86_64 / linux only / de-boosted
-// Modifications Copyright (C) 2022 Fix8 Market Technologies Pty Ltd
-// see https://github.com/fix8mt/f8fiber
-//-----------------------------------------------------------------------------------------
 #include <iostream>
-#include <iomanip>
-#include <thread>
 #include <functional>
-
+#include <deque>
+#include <set>
 #include <fix8/f8fiber.hpp>
 
+// CC=gcc CXX="g++ -ggdb" CXXFLAGS=-O0 -DCMAKE_BUILD_TYPE=Debug cmake ..
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
+using namespace std::literals;
 
 //-----------------------------------------------------------------------------------------
-struct Test
+void doit(int arg)
 {
-	f8_fiber foo(f8_fiber&& f, int i)
+	std::cout << this_fiber::name(("sub"s + std::to_string(arg)).c_str());
+	std::cout << "\tstarting " << arg << '\n';
+	for (int ii{}; ii < arg; )
 	{
-		std::cout << "foo:entry\n";
-		for (int kk{}; kk < i; ++kk)
+		std::cout << '\t' << arg << ": " << ++ii << '\n';
+		this_fiber::yield();
+	}
+	std::cout << "\tleaving " << arg << '\n';
+	fibers::print();
+}
+
+struct foo
+{
+	void sub(int arg)
+	{
+		doit(arg);
+	}
+	void sub1(int arg, const char *str)
+	{
+		std::cout << str << '\n';
+		doit(arg);
+	}
+	void sub3(int arg, const char *str)
+	{
+		auto st { "sub"s + std::to_string(arg) };
+		//std::cout << st << '\n';
+		this_fiber::name(st.c_str());
+		std::cout << "\tsub2 starting " << arg << '\n';
+		for (int ii{}; ii < arg; )
 		{
-			std::cout << "\tfoo:" << kk << '\n';
-			f.resume(f);
-			std::cout << "\tfoo resumed:" << kk << '\n';
+			std::cout << '\t' << arg << ": " << ++ii << '\n';
+			//this_fiber::sleep_until(std::chrono::steady_clock::now() + 500ms);
+			this_fiber::sleep_for(100ms);
 		}
-		std::cout << "foo:exit\n";
-		return std::move(f);
+		std::cout << "\tsub2 leaving " << arg << '\n';
+	}
+	void sub2()
+	{
+		doit(4);
 	}
 };
 
 //-----------------------------------------------------------------------------------------
-f8_fiber bar1(f8_fiber&& f, int i)
+int main(void)
 {
-	std::cout << "bar1:entry\n";
-	for (int kk{}; kk < i; ++kk)
+	foo bar;
+	f8_fiber sub_co(&doit, 3), sub_co1(&foo::sub2, &bar), sub_co2(&foo::sub, &bar, 5), sub_co3(&foo::sub1, &bar, 8., "hello"),
+		sub_co4(std::bind(&foo::sub3, &bar, 12, "there"), 32767);
+	f8_fiber sub_lam({.name="sub lambda"}, [](int arg)
 	{
-		std::cout << "\tbar1:" << kk << '\n';
-		f.resume(f);
-		std::cout << "\tbar1 resumed:" << kk << '\n';
-	}
-	std::cout << "bar1:exit\n";
-	return std::move(f);
-}
-
-//-----------------------------------------------------------------------------------------
-f8_fiber bar0(f8_fiber&& f)
-{
-	std::cout << "bar0:entry\n";
-	for (int kk{}; kk < 7; ++kk)
-	{
-		std::cout << "\tbar0:" << kk << '\n';
-		f.resume(f);
-		std::cout << "\tbar0 resumed:" << kk << '\n';
-	}
-	std::cout << "bar0:exit\n";
-	return std::move(f);
-}
-
-//-----------------------------------------------------------------------------------------
-int main()
-{
-	Test test;
-	f8_fiber f0 { &bar0 };
-	f8_fiber f1 { std::bind(&Test::foo, &test, std::placeholders::_1, 4) };
-	f8_fiber f2 { std::bind(&bar1, std::placeholders::_1, 12) };
-	f8_fiber f3 { std::bind([](f8_fiber&& f, int i)
-	{
-		std::cout << "bar2:entry\n";
-		for (int kk{}; kk < i; ++kk)
+		std::cout << "\tlam starting " << arg << '\n';
+		for (int ii{}; ii < arg; )
 		{
-			std::cout << "\tbar2:" << kk << '\n';
-			f.resume(f);
-			std::cout << "\tbar2 resumed:" << kk << '\n';
+			std::cout << '\t' << arg << ": " << ++ii << '\n';
+			this_fiber::yield();
 		}
-		std::cout << "bar2:exit\n";
-		return std::move(f);
-	}, std::placeholders::_1, 9) };
-
-	for (int ii{}; f0 || f1 || f2 || f3; ++ii)
+		std::cout << "\tlam leaving " << arg << '\n';
+	}, 15);
+	fibers::print();
+	for (int ii{}; fibers::has_fibers(); ++ii)
 	{
-		std::cout << "main:" << ii << '\n';
-		f0.resume(f0);
-		f1.resume(f1);
-		f2.resume(f2);
-		f3.resume(f3);
+		if (ii == 0)
+		{
+			fibers::print(std::cout);
+			sub_co3.resume();
+			fibers::print(std::cout);
+		}
+		this_fiber::yield();
+		std::cout << "main: " << std::dec << ii << '\n';
+		//fibers::print(std::cout);
 	}
+	std::cout << "Exiting from main\n";
+	std::cout << sizeof(f8_fiber) << '\n';
+	std::cout << sizeof(f8_fiber_base) << '\n';
 	return 0;
 }
-

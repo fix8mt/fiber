@@ -1,88 +1,39 @@
-//-----------------------------------------------------------------------------------------
-// f8_fiber (header only) based on boost::fiber, x86_64 / linux only / de-boosted
-// Modifications Copyright (C) 2022 Fix8 Market Technologies Pty Ltd
-// see https://github.com/fix8mt/f8fiber
-//-----------------------------------------------------------------------------------------
 #include <iostream>
-#include <iomanip>
-#include <thread>
-#include <array>
-#include <string>
-#include <random>
-
+#include <functional>
+#include <future>
 #include <fix8/f8fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
 
 //-----------------------------------------------------------------------------------------
-using Message = std::pair<bool, std::string>;
-
-//-----------------------------------------------------------------------------------------
-class Reader : public f8_fiber
+struct foo
 {
-	static const size_t _max_msg_len { 256 }, _hlen { 16 }, _tlen { 10 };
-	std::mt19937_64 _rnd_engine { std::random_device{}() };
-	std::uniform_int_distribution<char> _chd{0, 63};
-	std::uniform_int_distribution<size_t> _hld{12, 16}, _mld{80, 102};
-	int _rdcnt{};
-
-	int read_bytes(char *where, int cnt)
+	int sub(int arg)
 	{
-		static constexpr const char *b64set{ "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/" };
-		if (std::bernoulli_distribution()(_rnd_engine))
-			cnt = std::uniform_int_distribution<int>{0, cnt - 1}(_rnd_engine);
-		for (const auto ptr { where + cnt }; where < ptr; ++where)
-			*where = b64set[_chd(_rnd_engine)];
-		return cnt;
+		fibers::print(std::cout);
+		std::cout << "\tstarting " << arg << '\n';
+		for (int ii{}; ii < arg; )
+			std::cout << '\t' << arg << ": " << ++ii << '\n';
+		std::cout << "\tleaving " << arg << '\n';
+		return arg * 100;
 	}
-
-	f8_fiber read_nb (f8_fiber&& f, Message& msg)
-	{
-		std::array<char, _max_msg_len> buff;
-		for (int ii{}; ii < _rdcnt; ++ii)
-		{
-			auto hlen { _hld(_rnd_engine) }, mlen { _mld(_rnd_engine) }; // variable header and body length
-			// read header, yield if nothing or insufficent to read
-			for (int sofar{}; (sofar += read_bytes(buff.data() + sofar, hlen - sofar)) < hlen; f8_yield(f));
-			buff[hlen++] = ':'; // separator
-			// read body, yield if nothing or insufficent to read
-			for (int sofar{}; (sofar += read_bytes(buff.data() + hlen + sofar, mlen - sofar)) < mlen; f8_yield(f));
-			buff[hlen + mlen++] = ':'; // separator
-			// read trailer, yield if nothing or insufficent to read
-			for (int sofar{}; (sofar += read_bytes(buff.data() + hlen + sofar + mlen, _tlen - sofar)) < _tlen; f8_yield(f));
-			msg = { true, {buff.data(), hlen + mlen + _tlen} };
-			f8_yield(f);
-		}
-		std::cout << "read " << _rdcnt << " messages\n";
-		return std::move(f);
-	}
-
-public:
-	Reader(Message& msg, int rdcnt)
-		: _rdcnt(rdcnt), f8_fiber(&Reader::read_nb, this, std::placeholders::_1, std::ref(msg)) {}
 };
 
 //-----------------------------------------------------------------------------------------
-int main(int argc, char *argv[])
+int main(void)
 {
-	Message msg;
-	auto& [ready, str]{ msg };
-	Reader reader(msg, argc > 1 ? std::stol(argv[1]) : 100);
-
-	for (int pauses{}; reader;)
+	try
 	{
-		f8_yield(reader);
-		if (ready)
-		{
-			std::cout << std::setw(2) << pauses << " => " << std::setw(3) << str.size() << ' ' << str << '\n';
-			ready = false;
-			pauses = 0;
-		}
-		else
-			++pauses;
+		foo bar;
+		std::future<int> myfuture { async({.policy=launch::dispatch}, &foo::sub, &bar, 10) };
+		std::cout << "Future result = " << myfuture.get() << '\n';
+		fibers::print(std::cout);
 	}
-
+	catch (const std::future_error& e)
+	{
+		std::cerr << "Exception: " << e.what() << '(' << e.code() << ")\n";
+	}
+	std::cout << "Exiting from main\n";
 	return 0;
 }
-

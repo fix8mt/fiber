@@ -2,24 +2,20 @@
 #include <functional>
 #include <deque>
 #include <set>
-#include <future>
-#include <fix8/f8schedfiber.hpp>
+#include <fix8/f8fiber.hpp>
 
+// CC=gcc CXX="g++ -ggdb" CXXFLAGS=-O0 -DCMAKE_BUILD_TYPE=Debug cmake ..
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
 
 //-----------------------------------------------------------------------------------------
 struct foo
 {
-	void sub(int arg, std::promise<int>& pr)
+	void sub(int arg)
 	{
 		std::cout << "\tstarting " << arg << '\n';
 		for (int ii{}; ii < arg; )
-		{
 			std::cout << '\t' << arg << ": " << ++ii << '\n';
-			this_fiber::yield();
-		}
-		pr.set_value(arg * 100);
 		std::cout << "\tleaving " << arg << '\n';
 	}
 };
@@ -30,21 +26,15 @@ int main(void)
 	try
 	{
 		foo bar;
-		std::promise<int> mypromise;
-		auto myfuture { mypromise.get_future() };
-		f8_sched_fiber sub_co(&foo::sub, &bar, 10, std::ref(mypromise));
-		for (int ii{}; sub_co; )
-		{
-			std::cout << "main: " << ++ii << '\n';
-			this_fiber::yield();
-		}
+		f8_fiber sub_co(&foo::sub, &bar, 10);
+		std::cout << "main\n";
+		this_fiber::yield();
+		fibers::print();
 		std::cout << "Exiting from main\n";
-		std::cout << "Future result = " << myfuture.get() << '\n';
-		std::cout << "Repeated result (should throw exception) = " << myfuture.get() << '\n';
 	}
-	catch (const std::future_error& e)
+	catch (const std::exception& e)
 	{
-		std::cerr << "Exception: " << e.what() << '(' << e.code() << ")\n";
+		std::cerr << "\nException: " << e.what() << '\n';
 	}
 	return 0;
 }
