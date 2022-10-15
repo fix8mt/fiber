@@ -3,24 +3,21 @@
 </p>
 
 # f8fiber
-### C++17 fiber based on modified `boost::fiber`, header-only / fcontext / x86_64 / Linux only / de-boosted / stackful
+### C++17 fiber similar to `boost::fiber`, header-only / x86_64 / Linux only / stackful / built-in scheduler
 
 ------------------------------------------------------------------------
 ## Introduction
-This is a modified and stripped down version of [boost::fiber](https://www.boost.org/doc/libs/release/libs/fiber/), with the main differences as follows:
+This is novel fiber implementation, with some ideas from boost::fiber.
 - **x86_64 Linux only**
 - single _header-only_
 - auto cleanup - fiber will be removed when it goes out of scope without needing it to 'return'
-- fcontext implemented with inline assembly
+- implemented with inline assembly
 - `std::bind` can be omitted with args forwarded by ctor
-- default stack uses `mmap`, control structure allocated on stack; heap stack available
-- custom allocator support, default protected stack
 - exception safe - all exceptions can be captured by a `std::exception_ptr` within the fiber, and can be rethrown by the caller
 - simplified API, rvalue and lvalue resume()
-- f8_fiber printer
-- supports any callable object with first parameter `f8_fiber&&` and returning `f8_fiber`
-- no scheduler, no `boost::context`
-- _de-boosted_, no boost dependencies
+- fiber printer
+- supports any callable object
+- built-in scheduler
 - fast, very lightweight
 
 ## To build
@@ -102,19 +99,18 @@ class foo
 public:
    foo(int cnt) : _cnt(cnt) {}
 
-   f8_fiber func (f8_fiber&& f, bool& flags)
+   void func (bool& flags)
    {
       std::cout << "\tfunc:entry\n";
       std::cout << "\tcaller id:" << f.get_id() << '\n';
       for (int kk{}; kk < _cnt; ++kk)
       {
          std::cout << "\tfunc:" << kk << '\n';
-         f8_yield(f);
+         this_fiber::yield();
          std::cout << "\tfunc:" << kk << " (resumed)\n";
       }
       flags = true;
       std::cout << "\tfunc:exit\n";
-      return std::move(f);
    }
 };
 
@@ -122,14 +118,14 @@ int main(int argc, char *argv[])
 {
    bool flags{};
    foo bar(argc > 1 ? std::stol(argv[1]) : 5);
-   f8_fiber f0(&foo::func, &bar, std::placeholders::_1, std::ref(flags));
+   fiber f0(&foo::func, &bar, std::ref(flags));
    std::cout << "fiber id:" << f0.get_id() << '\n';
    std::cout << "flags=" << std::boolalpha << flags << '\n';
 
    for (int ii{}; f0; ++ii)
    {
       std::cout << "main:" << ii << '\n';
-      f8_yield(f0);
+      this_fiber::yield();
       std::cout << "main:" << ii << " (resumed)\n";
    }
    std::cout << "flags=" << std::boolalpha << flags << '\n';
