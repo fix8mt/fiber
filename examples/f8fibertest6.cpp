@@ -20,13 +20,13 @@ void print_b()
 
 int test()
 {
-	f8_fiber([]()
+	fiber([]()
 	{
 		int ii{};
 		do print_a(); while (ii++ < 1000);
 	}).detach();
 
-	f8_fiber([]()
+	fiber([]()
 	{
 		int ii{};
 		do print_b(); while (ii++ < 1000);

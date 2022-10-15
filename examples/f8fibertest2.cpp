@@ -15,7 +15,7 @@ int main(void)
 	{
 		std::promise<int> mypromise;
 		auto myfuture { mypromise.get_future() };
-		f8_fiber sub_co([](int arg, std::promise<int>& pr)
+		fiber sub_co([](int arg, std::promise<int>& pr)
 		{
 			std::cout << "\tstarting " << arg << '\n';
 			for (int ii{}; ii < arg; )

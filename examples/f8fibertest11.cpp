@@ -27,10 +27,10 @@ int main()
 	};
 	std::array work
 	{
-		f8_fiber{ {.launch_order=0,.name="first"},	func, wordset[0] },
-		f8_fiber{ {.launch_order=2,.name="second"},	func, wordset[1] },
-		f8_fiber{ {.launch_order=3,.name="third"},	func, wordset[2] },
-		f8_fiber{ {.launch_order=1,.name="fourth"},	func, wordset[3] }
+		fiber{ {.launch_order=0,.name="first"},	func, wordset[0] },
+		fiber{ {.launch_order=2,.name="second"},	func, wordset[1] },
+		fiber{ {.launch_order=3,.name="third"},	func, wordset[2] },
+		fiber{ {.launch_order=1,.name="fourth"},	func, wordset[3] }
 	};
 
 	fibers::print();

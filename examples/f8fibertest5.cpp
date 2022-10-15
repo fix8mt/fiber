@@ -9,10 +9,16 @@
 using namespace FIX8;
 
 //-----------------------------------------------------------------------------------------
+struct blah
+{
+	~blah() { std::cout << "~blah()\n"; }
+};
+
 struct foo
 {
 	void sub(int arg, std::promise<int>& pr)
 	{
+		blah b;
 		try
 		{
 			std::cout << "\tstarting " << arg << '\n';
@@ -21,9 +27,9 @@ struct foo
 				std::cout << '\t' << arg << ": " << ++ii << '\n';
 				this_fiber::yield();
 			}
-			pr.set_value(arg * 100);
+			//pr.set_value(arg * 100);
 			std::cout << "\tleaving " << arg << '\n';
-			//throw std::runtime_error("test exception");
+			throw std::runtime_error("test exception");
 		}
 		catch (...)
 		{
@@ -37,6 +43,7 @@ struct foo
 			}
 		}
 	}
+	~foo() { std::cout << "~foo()\n"; }
 };
 
 //-----------------------------------------------------------------------------------------
@@ -45,7 +52,7 @@ int main(void)
 	foo bar;
 	std::promise<int> mypromise;
 	auto myfuture { mypromise.get_future() };
-	f8_fiber sub_co(&foo::sub, &bar, 10, std::ref(mypromise));
+	fiber sub_co(&foo::sub, &bar, 10, std::ref(mypromise));
 	for (int ii{}; sub_co; )
 	{
 		std::cout << "main: " << ++ii << '\n';

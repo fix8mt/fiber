@@ -21,7 +21,7 @@ int main()
 		int order{};
 		for (const auto& pp : wordset)
 		{
-			f8_fiber ({.launch_order=order++}, [](const auto& words)
+			fiber ({.launch_order=order++}, [](const auto& words)
 			{
 				for (const auto& pp : words)
 				{

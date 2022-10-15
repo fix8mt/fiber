@@ -10,8 +10,13 @@ using namespace FIX8;
 using namespace std::literals;
 
 //-----------------------------------------------------------------------------------------
+struct blah
+{
+	~blah() { std::cout << "~blah() - " << this_fiber::name() << '\n'; }
+};
 void doit(int arg)
 {
+	blah b;
 	std::cout << "\tstarting " << this_fiber::name() << ' ' << arg << '\n';
 	for (int ii{}; ii < arg; )
 	{
@@ -24,7 +29,7 @@ void doit(int arg)
 //-----------------------------------------------------------------------------------------
 int main(void)
 {
-	f8_fiber sub_co({.name="sub0"}, &doit, 9), sub_co1({.name="sub1"}, &doit, 10);
+	fiber sub_co({.name="sub0"}, &doit, 9), sub_co1({.name="sub1"}, &doit, 10);
 	fibers::print();
 	for (int ii{}; fibers::has_fibers(); ++ii)
 	{
@@ -37,7 +42,7 @@ int main(void)
 		if (ii == 6)
 		{
 			fibers::print();
-			sub_co1.kill();
+			sub_co1.unsuspend();
 			fibers::print();
 		}
 		this_fiber::yield();

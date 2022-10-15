@@ -32,7 +32,7 @@ int main(void)
 		foo bar;
 		std::packaged_task<int(int)> task(std::bind(&foo::sub, &bar, std::placeholders::_1));
 		std::future<int> myfuture { task.get_future() };
-		f8_fiber sub_co(std::move(task), 10);
+		fiber sub_co(std::move(task), 10);
 		for (int ii{}; sub_co; )
 		{
 			std::cout << "main: " << ++ii << '\n';

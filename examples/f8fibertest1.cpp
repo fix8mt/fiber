@@ -26,7 +26,7 @@ int main(void)
 	try
 	{
 		foo bar;
-		f8_fiber sub_co(&foo::sub, &bar, 10);
+		fiber sub_co(&foo::sub, &bar, 10);
 		std::cout << "main\n";
 		this_fiber::yield();
 		fibers::print();

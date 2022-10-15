@@ -37,7 +37,6 @@ struct foo
 	void sub3(int arg, const char *str)
 	{
 		auto st { "sub"s + std::to_string(arg) };
-		//std::cout << st << '\n';
 		this_fiber::name(st.c_str());
 		std::cout << "\tsub2 starting " << arg << '\n';
 		for (int ii{}; ii < arg; )
@@ -58,17 +57,21 @@ struct foo
 int main(void)
 {
 	foo bar;
-	f8_fiber sub_co(&doit, 3), sub_co1(&foo::sub2, &bar), sub_co2(&foo::sub, &bar, 5), sub_co3(&foo::sub1, &bar, 8., "hello"),
-		sub_co4(std::bind(&foo::sub3, &bar, 12, "there"), 32767);
-	f8_fiber sub_lam({.name="sub lambda"}, [](int arg)
+	fiber sub_co({.stacksz=2048}, &doit, 3),
+			sub_co1({.stacksz=16384}, &foo::sub2, &bar),
+			sub_co2({.stacksz=32768}, &foo::sub, &bar, 5),
+			sub_co3({.stacksz=8192}, &foo::sub1, &bar, 8., "hello"),
+			sub_co4(std::bind(&foo::sub3, &bar, 12, "there"));
+	char stack[1024];
+	fiber sub_lam({.name="sub lambda",.stacksz=sizeof(stack),.stack=stack}, [](int arg)
 	{
-		std::cout << "\tlam starting " << arg << '\n';
+		std::cout << "\tlambda starting " << arg << '\n';
 		for (int ii{}; ii < arg; )
 		{
 			std::cout << '\t' << arg << ": " << ++ii << '\n';
 			this_fiber::yield();
 		}
-		std::cout << "\tlam leaving " << arg << '\n';
+		std::cout << "\tlambda leaving " << arg << '\n';
 	}, 15);
 	fibers::print();
 	for (int ii{}; fibers::has_fibers(); ++ii)
@@ -84,7 +87,9 @@ int main(void)
 		//fibers::print(std::cout);
 	}
 	std::cout << "Exiting from main\n";
-	std::cout << sizeof(f8_fiber) << '\n';
-	std::cout << sizeof(f8_fiber_base) << '\n';
+	std::cout << sizeof(fiber) << '\n';
+	std::cout << sizeof(fiber_id) << '\n';
+	std::cout << sizeof(fiber_base) << '\n';
+	std::cout << sizeof(fiber_params) << '\n';
 	return 0;
 }

@@ -1,35 +1,36 @@
 #include <iostream>
 #include <thread>
+#include <cstdlib>
 #include <fix8/f8fiber.hpp>
 
-//-----------------------------------------------------------------------------------------
 using namespace FIX8;
 
-void print_a()
-{
-	std::cout << 'a';
-	this_fiber::yield();
-}
-
-void print_b()
-{
-	std::cout << 'b';
-	std::thread([]() { std::cout << 'B'; }).detach();
-	this_fiber::yield();
-}
-
+//-----------------------------------------------------------------------------------------
+// from Dilawar's Blog
+// https://dilawar.github.io/posts/2021/2021-11-14-example-boost-fiber/
+//-----------------------------------------------------------------------------------------
 int main()
 {
-	int ii{};
+	static int ii{};
 
-	f8_fiber([&ii]()
+	fiber([]()
 	{
-		do print_a();
+		do
+		{
+			std::cout << 'a';
+			this_fiber::yield();
+		}
 		while (++ii < 20);
 	}).detach();
-	f8_fiber([&ii]()
+
+	fiber([]()
 	{
-		do print_b();
+		do
+		{
+			std::cout << 'b';
+			std::thread([]() { std::cout << 'B'; }).detach();
+			this_fiber::yield();
+		}
 		while (++ii < 20);
 	}).detach();
 

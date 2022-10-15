@@ -1,8 +1,5 @@
 # ----------------------------------------------------------------------------------------
-# f8_fiber (header only) based on boost::fiber, x86_64 / linux only / de-boosted
-# Modifications Copyright (C) 2022 Fix8 Market Technologies Pty Ltd
-#
-# f8_sched_fiber (header only) Lightweight header-only stackful per-thread fiber
+# f8_fiber (header only) Lightweight header-only stackful per-thread fiber
 # 		with built-in roundrobin scheduler x86_64 / linux only
 # Copyright (C) 2022 Fix8 Market Technologies Pty Ltd
 #
@@ -35,8 +32,13 @@ cmake_minimum_required (VERSION 3.8)
 enable_language(CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-include_directories(${CMAKE_SOURCE_DIR}/include)
 project (f8fiber VERSION 2.0)
+
+include(FetchContent)
+FetchContent_Declare(Catch2 GIT_REPOSITORY https://github.com/catchorg/Catch2.git GIT_TAG v3.1.0)
+FetchContent_MakeAvailable(Catch2)
+
+include_directories(${CMAKE_SOURCE_DIR}/include)
 file(GLOB srcs "${CMAKE_SOURCE_DIR}/examples/*.cpp")
 foreach(x ${srcs})
 	get_filename_component(fn ${x} NAME_WLE)

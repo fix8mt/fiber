@@ -30,7 +30,7 @@ int main(void)
 {
 	foo bar;
 	const int limit{10};
-	f8_fiber sub_co({.name="sub"}, &foo::sub, &bar, limit, 1);
+	fiber sub_co({.name="sub"}, &foo::sub, &bar, limit, 1);
 	for (int ii{}; sub_co; )
 	{
 		std::cout << "main: " << ++ii << '\n';

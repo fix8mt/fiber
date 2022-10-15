@@ -11,20 +11,20 @@ using namespace FIX8;
 using namespace std::literals;
 
 //-----------------------------------------------------------------------------------------
-struct foo : f8_fiber
+struct foo : fiber
 {
-	foo(const char *str) : f8_fiber(&foo::sub, this, str) {}
+	foo(const char *str) : fiber(&foo::sub, this) { set_params(str); }
 
-	void sub(const char *str)
+	void sub()
 	{
-		std::cout << "\tstarting " << this_fiber::name(str) << '\n';
+		std::cout << "\tstarting " << this_fiber::name() << '\n';
 		for (int ii{}; ii < 5; )
 		{
-			std::cout << '\t' << str << ": " << std::dec << ++ii << '\n';
+			std::cout << '\t' << this_fiber::name() << ": " << std::dec << ++ii << '\n';
 			this_fiber::yield();
 		}
 		fibers::print();
-		std::cout << "\tleaving " << str << '\n';
+		std::cout << "\tleaving " << this_fiber::name() << '\n';
 	}
 };
 
