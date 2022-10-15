@@ -3,18 +3,17 @@
 </p>
 
 # f8fiber
-### C++17 fiber similar to `boost::fiber`, header-only / x86_64 / Linux only / stackful / built-in scheduler
+### A novel C++17 fiber implementation with some ideas from `boost::fiber`, header-only / x86_64 / Linux only / stackful / built-in scheduler
 
 ------------------------------------------------------------------------
 ## Introduction
-This is novel fiber implementation, with some ideas from boost::fiber.
+This is a novel fiber implementation, with some ideas from boost::fiber.
 - **x86_64 Linux only**
 - single _header-only_
 - auto cleanup - fiber will be removed when it goes out of scope without needing it to 'return'
-- implemented with inline assembly
+- context switch implemented with inline assembly
 - `std::bind` can be omitted with args forwarded by ctor
 - exception safe - all exceptions can be captured by a `std::exception_ptr` within the fiber, and can be rethrown by the caller
-- simplified API, rvalue and lvalue resume()
 - fiber printer
 - supports any callable object
 - built-in scheduler
@@ -56,7 +55,7 @@ catch (...)
 // in caller
 try
 {
-   f8_yield(my_fiber);
+   this_fiber::yield();
    if (_eptr)
       std::rethrow_exception(std::exchange(_eptr, nullptr));
 }
@@ -66,7 +65,7 @@ catch (const std::exception& e)
 }
 ```
 ### Printer
-You can print an `f8_fiber`. The printer will print the `f8_fiber_id`, the raw pointer to the resource object and a pointer to the typing object:
+You can print an `fiber`. The printer will print the `fiber_id`, the raw pointer to the resource object and a pointer to the typing object:
 ```c++
 .
 .
