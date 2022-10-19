@@ -49,6 +49,11 @@
 #include <mutex>
 #include <condition_variable>
 #include <set>
+#include <fcntl.h>
+#include <sys/resource.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <pthread.h>
 
 //-----------------------------------------------------------------------------------------
@@ -157,7 +162,110 @@ inline constexpr bool is_launch_policy_v = is_launch_policy<T>::value; // C++14 
 //-----------------------------------------------------------------------------------------
 enum fiber_flags { main, finished, suspended, dispatched, detached, notstarted, joinonexit, count }; // mfsednj
 
-struct fiber_params
+//-----------------------------------------------------------------------------------------
+/// ABC stack
+class alignas(16) f8_stack
+{
+protected:
+	char *_ptr{};
+	std::size_t _size{SIGSTKSZ};
+
+public:
+	f8_stack() = default;
+	virtual ~f8_stack() { deallocate(); }
+	f8_stack(f8_stack&&) = default;
+
+	f8_stack(f8_stack&) = delete;
+	f8_stack& operator=(f8_stack&) = delete;
+
+	virtual char *allocate(std::size_t size) = 0;
+	virtual void deallocate() { _ptr = nullptr; }
+	std::size_t size() const noexcept { return _size; }
+
+	friend std::ostream& operator<<(std::ostream& os, const f8_stack& what)
+	{
+		return os << reinterpret_cast<void *>(what._ptr) << ' ' << what._size;
+	}
+};
+
+using f8_stack_ptr = std::unique_ptr<f8_stack>;
+
+//-----------------------------------------------------------------------------------------
+/// Anonymous memory mapped region based stack
+class f8_protected_fixedsize_stack final : public f8_stack
+{
+public:
+	char *allocate(std::size_t size) override
+	{
+		if (!_ptr)
+		{
+			const auto PageSize { static_cast<size_t>(sysconf(_SC_PAGESIZE)) };
+			const std::size_t pages { (size + PageSize - 1) / PageSize }; // calculate pages required
+			_size = (pages + 1) * PageSize; // add a page at bottom for guard-page
+
+			if (void *vp { ::mmap(0, _size, PROT_READ | PROT_WRITE, MAP_PRIVATE |
+#if defined(USE_MAP_STACK)
+				MAP_ANON | MAP_STACK,
+#elif defined(MAP_ANON)
+				MAP_ANON,
+#else
+				MAP_ANONYMOUS,
+#endif
+				-1, 0) }; vp == MAP_FAILED)
+					throw std::bad_alloc();
+			else
+			{
+				//::mprotect(vp, PageSize, PROT_NONE);
+				_ptr = static_cast<char *>(vp);
+			}
+		}
+		return _ptr;
+	}
+
+	void deallocate() noexcept override
+	{
+		if (_ptr)
+			::munmap(_ptr, _size);
+		f8_stack::deallocate();
+	}
+};
+
+//-----------------------------------------------------------------------------------------
+/// Simple heap based stack
+class f8_fixedsize_heap_stack final : public f8_stack
+{
+public:
+	char *allocate(std::size_t size) override
+	{
+		if (!_ptr)
+		{
+			_size = size & ~0xff;
+			_ptr = static_cast<char *>(::operator new(_size));
+		}
+		return _ptr;
+	}
+	void deallocate() noexcept override
+	{
+		delete _ptr;
+		f8_stack::deallocate();
+	}
+};
+
+//-----------------------------------------------------------------------------------------
+/// Placement stack
+class f8_fixedsize_placement_stack final : public f8_stack
+{
+public:
+	f8_fixedsize_placement_stack(char *top) noexcept { _ptr = top; }
+	char *allocate(std::size_t size) noexcept override
+	{
+		_size = size;
+		return _ptr;
+	}
+};
+
+//-----------------------------------------------------------------------------------------
+struct alignas(16) fiber_params
 {
 	int launch_order{99};
 	const char name[FIBERNAMELEN]{};
@@ -165,7 +273,7 @@ struct fiber_params
 	// these next values can't be modified once the fiber has been created
 	const size_t stacksz{SIGSTKSZ};
 	const launch policy{launch::post};
-	char *const stack{}; // optional user supplied stack
+	f8_stack_ptr stack{std::make_unique<f8_fixedsize_heap_stack>()};
 };
 
 //-----------------------------------------------------------------------------------------
@@ -177,6 +285,7 @@ class alignas(16) fiber_base
 	fiber_params _params;
 	const fiber_id _pfid; // parent fiber
 	fiber_id _prev_fiber;
+	unsigned _ctxswtchs{};
 	std::bitset<fiber_flags::count> _flags;
 	std::chrono::steady_clock::time_point _tp{};
 	std::condition_variable _cv_join;
@@ -188,12 +297,6 @@ class alignas(16) fiber_base
 	// asm stack switch routine
 	static void _coroswitch(fiber_base *old, fiber_base *newer) noexcept;
 
-	static void destroy(fiber_base *pp)
-	{
-		pp->~fiber_base();
-		if (!pp->_params.stack)
-			delete[] reinterpret_cast<uintptr_t*>(pp);
-	}
 	static size_t get_default_stacksz()
 	{
 		static thread_local size_t sz([]()
@@ -224,12 +327,13 @@ class alignas(16) fiber_base
 	}
 
 public:
-	fiber_base() noexcept
-		: _stacksz{get_default_stacksz()}, _params{.name="main",.stacksz=_stacksz}, _flags{1 << fiber_flags::main} {}
+	fiber_base() noexcept : _stacksz{get_default_stacksz()},
+		_params{.name="main",.stacksz=_stacksz,.stack=f8_stack_ptr()},
+		_ctxswtchs{1}, _flags{1 << fiber_flags::main} {}
 
 	template<typename Fn>
-	fiber_base(fiber_params&& params, Fn&& func, uintptr_t *sp, size_t stacksz, fiber_id parent) noexcept
-		: _stacksz(stacksz), _stk_alloc(sp), _params(std::move(params)), _pfid(parent),
+	fiber_base(fiber_params&& params, Fn&& func, uintptr_t *sp, fiber_id parent) noexcept
+		: _stacksz(params.stacksz), _stk_alloc(sp), _params(std::move(params)), _pfid(parent),
 			_flags{(1 << fiber_flags::notstarted) | (_params.join ? (1 << fiber_flags::joinonexit) : 0ULL)}
 	{
 		setup_continuation(std::forward<Fn>(func));
@@ -365,11 +469,10 @@ public:
 	template<typename Fn>
 	fiber(fiber_params&& params, Fn&& func)
 	{
-		const uintptr_t sz { (params.stacksz + sizeof(fiber_base)) & ~static_cast<uintptr_t>(0xff) }, szadj { sz / sizeof(uintptr_t) };
-		uintptr_t *sp { params.stack	? new (reinterpret_cast<uintptr_t *>(params.stack)) uintptr_t[szadj] : new uintptr_t[szadj] };
+		uintptr_t *sp { reinterpret_cast<uintptr_t *>(params.stack->allocate(params.stacksz)) };
 		GetVars();
 		_ctx.reset(new (reinterpret_cast<char*>(sp))
-			fiber_base(std::move(params), std::forward<Fn>(func), sp, sz, cur->get_id()), [](auto *pp) { fiber_base::destroy(pp); });
+			fiber_base(std::move(params), std::forward<Fn>(func), sp, cur->get_id()), [](auto *pp) {});
 		uni.insert(_ctx);
 		sch.push_back(_ctx);
 		sort_queue(sch);
@@ -666,6 +769,7 @@ std::ostream& operator<<(std::ostream& os, const fiber_base& what)
 		<< ' ' << std::left << std::setw(4) << what.get_id()
 		<< ' ' << std::left << std::setw(4) << what.get_pid()
 		<< ' ' << std::left << std::setw(4) << what.get_prev_id()
+		<< ' ' << std::left << std::setw(4) << what._ctxswtchs
 		<< ' ' << std::right << std::setw(14) << what._stk
 		<< ' ' << std::right << std::setw(14) << what._stk_alloc
 		<< ' ' << std::right << std::setw(7) <<
@@ -717,6 +821,7 @@ void f8_this_fiber::yield() noexcept
 			if (cur->_flags[fiber_flags::notstarted])
 				cur->_flags.reset(fiber_flags::notstarted);
 			cur->_prev_fiber = front->get_id();
+			++cur->_ctxswtchs;
 			sch.push_back(front);
 			fiber_base::_coroswitch(front.get(), cur.get());
 			break;
@@ -757,7 +862,7 @@ bool f8_fibers::has_fibers() noexcept { return size(); }
 bool f8_fibers::has_ready_fibers() noexcept { return size_ready(); }
 void f8_fibers::print(std::ostream& os) noexcept
 {
-	os << "#      fid  pfid prev      stack ptr    stack alloc   depth  stacksz   flags ord name\n";
+	os << "#      fid  pfid prev ctxs      stack ptr    stack alloc   depth  stacksz   flags ord name\n";
 	int pos{};
 	GetVars();
 	os << std::left << std::setw(5) << std::dec << pos++ << *cur << std::endl;

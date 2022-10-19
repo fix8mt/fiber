@@ -1,0 +1,8 @@
+#!/bin/bash
+for file in ./f8fibertest*
+do
+	if [ -x ${file} ]; then
+		echo -e "\nRunning:" ${file}
+		${file}
+	fi
+done
