@@ -39,8 +39,50 @@ FetchContent_Declare(Catch2 GIT_REPOSITORY https://github.com/catchorg/Catch2.gi
 FetchContent_MakeAvailable(Catch2)
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
-file(GLOB srcs "${CMAKE_SOURCE_DIR}/examples/*.cpp")
+file(GLOB srcs "${CMAKE_SOURCE_DIR}/examples/f8*.cpp")
 foreach(x ${srcs})
 	get_filename_component(fn ${x} NAME_WLE)
 	add_executable(${fn} ${x})
 endforeach()
+
+# cmake -DBUILD_MONITOR=true ..
+if(${BUILD_MONITOR})
+	include(ExternalProject)
+	ExternalProject_Add(termbox2
+		GIT_REPOSITORY https://github.com/termbox/termbox2.git
+		GIT_PROGRESS true
+		GIT_TAG v2.0.0
+		UPDATE_DISCONNECTED true
+		CONFIGURE_COMMAND ""
+		BUILD_IN_SOURCE true
+		BUILD_COMMAND sh -c "make -j4"
+		INSTALL_COMMAND ""
+	)
+	set(termbox2 ${CMAKE_CURRENT_BINARY_DIR}/termbox2-prefix/src/termbox2)
+
+	ExternalProject_Add(gmp
+		GIT_REPOSITORY https://github.com/alisw/GMP.git
+		GIT_PROGRESS true
+		GIT_TAG v6.2.1
+		UPDATE_DISCONNECTED true
+		CONFIGURE_COMMAND sh -c "./configure --enable-cxx"
+		BUILD_IN_SOURCE true
+		BUILD_COMMAND sh -c "make -j4"
+		INSTALL_COMMAND ""
+		TEST_COMMAND sh -c "make -j4 check"
+	)
+	set(gmp ${CMAKE_CURRENT_BINARY_DIR}/gmp-prefix/src/gmp)
+
+	add_executable(montest1 ${CMAKE_SOURCE_DIR}/examples/montest1.cpp)
+	add_dependencies(montest1 termbox2)
+	target_include_directories(montest1 PRIVATE ${termbox2})
+	target_link_directories(montest1 PRIVATE ${termbox2})
+	target_link_libraries(montest1 PRIVATE termbox.a)
+
+	add_executable(montest2 ${CMAKE_SOURCE_DIR}/examples/montest2.cpp)
+	add_dependencies(montest2 termbox2 gmp)
+	target_include_directories(montest2 PRIVATE ${termbox2} ${gmp})
+	target_link_directories(montest2 PRIVATE ${termbox2} ${gmp}/.libs)
+	target_link_libraries(montest2 PRIVATE termbox.a gmpxx.a gmp.a)
+endif()
+

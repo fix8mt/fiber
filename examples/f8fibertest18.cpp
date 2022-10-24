@@ -49,5 +49,7 @@ int main(void)
 	}
 	std::cout << "result = " << result << '\n';
 	std::cout << "Exiting main\n";
+	auto& hh { fiber::const_get_vars() };
+	std::cout << hh._curr->get_id() << '\n';
 	return 0;
 }

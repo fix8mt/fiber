@@ -62,7 +62,7 @@ int main(void)
 			sub_co2({.stacksz=32768}, &foo::sub, &bar, 5),
 			sub_co3({.stacksz=8192}, &foo::sub1, &bar, 8., "hello"),
 			sub_co4(std::bind(&foo::sub3, &bar, 12, "there"));
-	fiber sub_lam({.name="sub lambda",.stack=std::make_unique<f8_protected_fixedsize_stack>()}, [](int arg)
+	fiber sub_lam({.name="sub lambda",.stack=std::make_unique<f8_fixedsize_mapped_stack>()}, [](int arg)
 	//char stack[4096];
 	//fiber sub_lam({.name="sub lambda",.stacksz=sizeof(stack),.stack=std::make_unique<f8_fixedsize_placement_stack>(stack)}, [](int arg)
 	{
@@ -87,10 +87,11 @@ int main(void)
 		std::cout << "main: " << std::dec << ii << '\n';
 		//fibers::print(std::cout);
 	}
-	std::cout << "Exiting from main\n";
-	std::cout << "sizeof(fiber): " << sizeof(fiber) << '\n';
-	std::cout << "sizeof(fiber_id): " << sizeof(fiber_id) << '\n';
-	std::cout << "sizeof(fiber_base): " << sizeof(fiber_base) << '\n';
-	std::cout <<"sizeof(fiber_params): " << sizeof(fiber_params) << '\n';
+	std::cout << "Exiting from main\nSizes\n";
+	std::cout << "fiber: " << sizeof(fiber) << '\n';
+	std::cout << "fiber::cvars: " << sizeof(fiber::cvars) << '\n';
+	std::cout << "fiber_id: " << sizeof(fiber_id) << '\n';
+	std::cout << "fiber_base: " << sizeof(fiber_base) << '\n';
+	std::cout <<"fiber_params: " << sizeof(fiber_params) << '\n';
 	return 0;
 }

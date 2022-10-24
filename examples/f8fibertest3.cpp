@@ -3,6 +3,7 @@
 #include <deque>
 #include <set>
 #include <future>
+#define FIBER_NO_INSTRUMENTATION
 #include <fix8/f8fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
