@@ -16,7 +16,7 @@ void doit(int arg)
 	std::cout << "\tstarting " << arg << '\n';
 	for (int ii{}; ii < arg; )
 	{
-		std::cout << '\t' << arg << ": " << ++ii << '\n';
+		std::cout << '\t' << this_fiber::name() << ' ' << arg << ": " << ++ii << '\n';
 		this_fiber::yield();
 	}
 	std::cout << "\tleaving " << arg << '\n';
@@ -41,7 +41,7 @@ struct foo
 		std::cout << "\tsub2 starting " << arg << '\n';
 		for (int ii{}; ii < arg; )
 		{
-			std::cout << '\t' << arg << ": " << ++ii << '\n';
+			std::cout << '\t' << this_fiber::name() << ' ' << arg << ": " << ++ii << '\n';
 			//this_fiber::sleep_until(std::chrono::steady_clock::now() + 500ms);
 			this_fiber::sleep_for(100ms);
 		}
@@ -69,12 +69,11 @@ int main(void)
 		std::cout << "\tlambda starting " << arg << '\n';
 		for (int ii{}; ii < arg; )
 		{
-			std::cout << '\t' << arg << ": " << ++ii << '\n';
+			std::cout << '\t' << this_fiber::name() << ' ' << arg << ": " << ++ii << '\n';
 			this_fiber::yield();
 		}
 		std::cout << "\tlambda leaving " << arg << '\n';
 	}, 15);
-	fibers::print();
 	for (int ii{}; fibers::has_fibers(); ++ii)
 	{
 		if (ii == 0)

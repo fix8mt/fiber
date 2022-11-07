@@ -29,7 +29,10 @@ void doit_with_stoprequest(bool& stop_requested)
 		if (stop_requested)
 		{
 			if (waitagain)
+			{
+				std::cout << '\t' << this_fiber::name() << ": stop actioned\n";
 				break;
+			}
 			else
 			{
 				std::cout << '\t' << this_fiber::name() << ": stop requested\n";
@@ -51,9 +54,9 @@ int main(void)
 	{
 		std::cout << this_fiber::name() << ": " << ++ii << '\n';
 		std::this_thread::sleep_for(100ms);
-		if (ii == 5)
-			stop_requested = true;
 	}
+	stop_requested = true;
+	this_fiber::yield();
 	fibers::print();
 	std::cout << "Exiting " << this_fiber::name() << '\n';
 	return 0;

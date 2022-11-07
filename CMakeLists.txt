@@ -1,9 +1,12 @@
 # ----------------------------------------------------------------------------------------
-# f8_fiber (header only) Lightweight header-only stackful per-thread fiber
-# 		with built-in roundrobin scheduler x86_64 / linux only
+# fiber (header only)
 # Copyright (C) 2022 Fix8 Market Technologies Pty Ltd
-#
+#   by David L. Dight
 # see https://github.com/fix8mt/f8fiber
+#
+# Lightweight header-only stackful per-thread fiber
+#		with built-in roundrobin scheduler x86_64 / linux only
+#
 # Distributed under the Boost Software License, Version 1.0 August 17th, 2003
 #
 # Permission is hereby granted, free of charge, to any person or organization
@@ -39,8 +42,13 @@ FetchContent_Declare(Catch2 GIT_REPOSITORY https://github.com/catchorg/Catch2.gi
 FetchContent_MakeAvailable(Catch2)
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
-file(GLOB srcs "${CMAKE_SOURCE_DIR}/examples/f8*.cpp")
-foreach(x ${srcs})
+file(GLOB esrc "${CMAKE_SOURCE_DIR}/examples/f8*.cpp")
+foreach(x ${esrc})
+	get_filename_component(fn ${x} NAME_WLE)
+	add_executable(${fn} ${x})
+endforeach()
+file(GLOB tsrc "${CMAKE_SOURCE_DIR}/test/*.cpp")
+foreach(x ${tsrc})
 	get_filename_component(fn ${x} NAME_WLE)
 	add_executable(${fn} ${x})
 endforeach()
@@ -65,7 +73,7 @@ if(${BUILD_MONITOR})
 		GIT_PROGRESS true
 		GIT_TAG v6.2.1
 		UPDATE_DISCONNECTED true
-		CONFIGURE_COMMAND sh -c "./configure --enable-cxx"
+		CONFIGURE_COMMAND sh -c "./configure --enable-cxx -enable-alloca=alloca"
 		BUILD_IN_SOURCE true
 		BUILD_COMMAND sh -c "make -j4"
 		INSTALL_COMMAND ""

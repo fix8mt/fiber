@@ -26,7 +26,7 @@ int main(void)
 	try
 	{
 		foo bar;
-		std::future<int> myfuture { async({.policy=launch::dispatch}, &foo::sub, &bar, 10) };
+		std::future<int> myfuture { async(&foo::sub, &bar, 10) };
 		std::cout << "Future result = " << myfuture.get() << '\n';
 		fibers::print(std::cout);
 	}

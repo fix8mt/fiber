@@ -38,8 +38,8 @@
 #include <termbox.h>
 
 //-----------------------------------------------------------------------------------------
-#if !defined FIX8_FIBER_INSTRUMENTATION_
-#error fiber_monitor requires FIX8_NO_INSTRUMENTATION to be undefined
+#if defined FIBER_NO_INSTRUMENTATION || !defined FIX8_FIBER_INSTRUMENTATION_
+#error "fiber_monitor requires FIBER_NO_INSTRUMENTATION to be undefined"
 #endif
 
 //-----------------------------------------------------------------------------------------
@@ -48,15 +48,18 @@ namespace FIX8 {
 //-----------------------------------------------------------------------------------------
 class fiber_monitor
 {
-	enum class mode { by_sched, by_id, by_ms } _mode { mode::by_id };
+public:
+	enum class sort_mode { by_sched, by_id, by_ms, by_tms, count };
+private:
+	sort_mode _mode;
 	const std::chrono::milliseconds _timeout;
 	std::chrono::steady_clock::time_point _tp;
 	bool _quit{}, _pause{};
 	std::pair<int, int> _dimensions;
 
 public:
-	fiber_monitor(std::chrono::milliseconds timeout=std::chrono::milliseconds(0))
-		: _timeout(timeout), _tp{std::chrono::steady_clock::now()}
+	fiber_monitor(std::chrono::milliseconds timeout=std::chrono::milliseconds(1), sort_mode mode=sort_mode::by_id)
+		: _mode(mode), _timeout(timeout), _tp{std::chrono::steady_clock::now()}
 	{
 		tb_init();
 		_dimensions = { tb_width(), tb_height() };
@@ -69,16 +72,16 @@ public:
 		tb_shutdown();
 	}
 
-	bool is_quit() const { return _quit; }
+	bool is_quit() const noexcept { return _quit; }
 	bool operator! () const noexcept { return is_quit(); }
-	std::pair<int, int> get_dimensions() const { return _dimensions; }
+	std::pair<int, int> get_dimensions() const noexcept { return _dimensions; }
 
 	void update_row(int row, int pos, bool iscurrent, const fiber_base& what) const
 	{
 		row %= (_dimensions.second - 2);
 		if (pos > _dimensions.second - 4)
 			++row;
-		tb_printf(pos < _dimensions.second - 3 ? 0 : _dimensions.first / 2, row, 0, iscurrent ? TB_RED : 0,
+		tb_printf(pos < _dimensions.second - 3 ? 0 : _dimensions.first / 2, row, 0, iscurrent ? TB_BOLD|TB_RED : 0,
 			"%-4u %c %-4s %-4s %-4s %6u %6u %4u %#14lx %#14lx %6u %8u %7s %3u %15s",
 			pos, iscurrent ? '*' : ' ', what.get_id().to_string().c_str(), what.get_pid().to_string().c_str(),
 			what.get_prev_id().to_string().c_str(), what._ctxswtchs,
@@ -100,33 +103,42 @@ public:
 		}
 
 		static constexpr const char *banner {
-			"#      fid  pfid prev   ctxs  t(ms)   ^t      stack ptr    stack alloc  depth  stacksz   flags ord            name"};
+			"#      fid  pfid prev  ctxsw  t(ms)   ^t      stack ptr    stack alloc  depth  stacksz   flags ord            name"};
 
 		if (!_pause)
 		{
 			if (!vs)
-				vs = &fiber::const_get_vars();
+				vs = &fibers::const_get_vars();
 			tb_clear();
 			int y{}, pos{};
 			tb_printf(0, y++, TB_BOLD|TB_WHITE, TB_GREEN, banner);
 			if (vs->_uniq.size() > _dimensions.second - 2)
 				tb_printf(_dimensions.first / 2, 0, TB_BOLD|TB_WHITE, TB_GREEN, banner);
-			if (_mode == mode::by_sched)
+			if (_mode == sort_mode::by_sched)
 			{
 				update_row(y++, pos++, true, *vs->_curr);
 				for (const auto& pp : vs->_sched) // scheduled
 					update_row(y++, pos++, false, *pp);
-				pos = 0;
-				for (const auto& pp : vs->_det) // detached (shown with -ve #)
-					update_row(y++, --pos, false, *pp);
+				if (vs->_gflags[static_cast<int>(global_fiber_flags::showdetached)])
+				{
+					pos = 0;
+					for (const auto& pp : vs->_det) // detached (shown with -ve #)
+						update_row(y++, --pos, false, *pp);
+				}
 			}
-			else if (_mode == mode::by_id)
+			else if (_mode == sort_mode::by_id)
 				for (const auto& pp : vs->_uniq) // all fibers
 					update_row(y++, pos++, pp == vs->_curr, *pp);
 			else
 			{
-				struct tcmp { bool operator()(const fiber_base_ptr& lhs, const fiber_base_ptr& rhs) const { return lhs->_extime < rhs->_extime; } };
-				std::multiset<fiber_base_ptr, tcmp> tset;
+				struct tcmp
+				{
+					bool _way;
+					tcmp(bool way) : _way(way) {}
+					bool operator()(const fiber_base_ptr& lhs, const fiber_base_ptr& rhs) const
+						{ return _way ? lhs->_extime < rhs->_extime : lhs->_exdelta < rhs->_exdelta; }
+				};
+				std::multiset<fiber_base_ptr, tcmp> tset(_mode == sort_mode::by_ms);
 				for (const auto pp : vs->_uniq) // all fibers
 					tset.emplace(pp);
 				for (const auto& pp : tset)
@@ -139,7 +151,7 @@ public:
 			switch (event.ch)
 			{
 			case TB_KEY_SPACE:
-				_mode = static_cast<mode>((static_cast<int>(_mode) + 1) % 3);
+				_mode = static_cast<sort_mode>((static_cast<int>(_mode) + 1) % static_cast<int>(sort_mode::count));
 				break;
 			case 'p':
 				_pause ^= true;
@@ -151,7 +163,7 @@ public:
 				break;
 			}
 		}
-		tb_printf(0, tb_height() - 1, 0, TB_GREEN, "<space> toggle mode(%d), <p> pause, <x> exit", static_cast<int>(_mode));
+		tb_printf(0, tb_height() - 1, 0, TB_GREEN, "<space> toggle sort mode(%d), <p> pause, <x> exit", static_cast<int>(_mode));
 		tb_present();
 	}
 };

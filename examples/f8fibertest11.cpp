@@ -18,13 +18,13 @@ int main()
 		}
 	});
 
-	static const std::vector<std::vector<std::string_view>> wordset
-	{
-		{	"I",			"all",	"said",	"It’s",		"I’m",		"\n  –",			},
+	static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
+	{{
+		{	R"("I)",		"all",	"said",	"It’s",		"I’m",		"\n  –",			},
 		{	"thankful",	"those",	"to",		"of",			"it",			"Einstein\n"	},
-		{	"for",		"who",	"me.",	"them",		"myself.", 						},
+		{	"for",		"who",	"me.",	"them",		"myself\".",					},
 		{	"am",			"of",		"no",		"because",	"doing",		"Albert",		},
-	};
+	}};
 	std::array work
 	{
 		fiber{ {.launch_order=0,.name="first"},	func, wordset[0] },

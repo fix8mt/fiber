@@ -56,16 +56,16 @@ using namespace FIX8;
 using namespace std::literals;
 
 //-----------------------------------------------------------------------------------------
-class foo
+class foo : public fiber_monitor
 {
-	fiber_monitor& _fm;
 	std::mt19937_64 _rnde {std::random_device{}()};
 	std::uniform_int_distribution<long> _exp;
 	bool _todisk;
 
 public:
-	foo(fiber_monitor& fm, long maxexp, bool todisk)
-		: _fm(fm), _exp{1, maxexp}, _todisk(todisk) {}
+	foo(int interval, long maxexp, bool todisk) :
+		fiber_monitor(std::chrono::milliseconds(interval), fiber_monitor::sort_mode::by_ms),
+		_exp{1, maxexp}, _todisk(todisk) {}
 
 	void func(int arg)
 	{
@@ -74,19 +74,17 @@ public:
 
 		for (int ii{}; ii < 10 + arg; ++ii)
 		{
-			auto expv { _exp(_rnde) };
+			auto expv { _exp(_rnde) }; // obtain our exponent
 			std::ostringstream ostr;
 			ostr << "2^" << expv;
 			this_fiber::name(ostr.str().c_str());
-			_fm.update();
+			update();
 			mpz_class pr;
 			mpz_ui_pow_ui(pr.get_mpz_t(), 2, expv); // raise 2^expv
 			if (ofstr)
 				*ofstr << ostr.str() << " = " << pr << '\n';
-			_fm.update();
-			if (!_fm) // user pressed 'x'
-				this_fiber::resume_main();
-			this_fiber::yield();
+			update();
+			is_quit() ? this_fiber::resume_main() : this_fiber::yield(); // user pressed 'x'?
 		}
 		this_fiber::name("finished");
 	}
@@ -143,23 +141,22 @@ int main(int argc, char *argv[])
 	if (todisk && maxexp == 4999999999L)
 		maxexp = 10000000L;
 
-	fiber_monitor fm{std::chrono::milliseconds(interval)};
-	foo bar(fm, maxexp, todisk);
+	foo bar(interval, maxexp, todisk);
 	std::vector<std::unique_ptr<fiber>> fbs;
 	for (int ii{}; ii < fcnt; ++ii)
 		fbs.emplace_back(std::make_unique<fiber>(fiber_params{.launch_order=ii}, &foo::func, &bar, ii));
 	fibers::set_flag(global_fiber_flags::retain);
 
-	for (int ii{}; fibers::has_fibers(); ++ii)
+	while (fibers::has_fibers())
 	{
-		if (!fm)
+		if (!bar)
 		{
 			fibers::kill_all();
 			break;
 		}
 		this_fiber::yield();
 	}
-	fm.update();
-	std::this_thread::sleep_for(1s);
+	bar.update();
+	std::this_thread::sleep_for(3s);
 	return 0;
 }

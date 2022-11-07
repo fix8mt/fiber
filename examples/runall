@@ -1,5 +1,5 @@
 #!/bin/bash
-for file in ./f8fibertest*
+for file in `ls ./f8fibertest* | sort -V`
 do
 	if [ -x ${file} ]; then
 		echo -e "\nRunning:" ${file}

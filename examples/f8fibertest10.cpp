@@ -1,6 +1,6 @@
 #include <iostream>
 #include <string_view>
-#include <vector>
+#include <array>
 #include <fix8/f8fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
@@ -11,13 +11,13 @@ int main()
 {
 	std::thread([]()
 	{
-		static const std::vector<std::vector<std::string_view>> wordset
-		{
-			{	"I",			"all",	"said",	"It’s",		"I’m",		"\n  –",		},
+		static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
+		{{
+			{	R"("I)",		"all",	"said",	"It’s",		"I’m",		"\n  –",		},
 			{	"am",			"of",		"no",		"because",	"doing",		"Albert",	},
 			{	"thankful",	"those",	"to",		"of",			"it",			"Einstein"	},
-			{	"for",		"who",	"me.",	"them",		"myself.", 					},
-		};
+			{	"for",		"who",	"me.",	"them",		"myself.\"",				},
+		}};
 		int order{};
 		for (const auto& pp : wordset)
 		{
