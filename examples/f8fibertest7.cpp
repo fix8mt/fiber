@@ -1,6 +1,5 @@
 #include <iostream>
 #include <thread>
-#include <cstdlib>
 #include <fix8/f8fiber.hpp>
 
 using namespace FIX8;

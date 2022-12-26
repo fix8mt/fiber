@@ -54,15 +54,17 @@ class foo
 {
 	fiber_monitor& _fm;
 	int _sleepval;
+	window_frame _xyxy;
 
 public:
-	foo(fiber_monitor& fm, int sleepval) : _fm(fm), _sleepval(sleepval) {}
+	foo(fiber_monitor& fm, int sleepval) : _fm(fm), _sleepval(sleepval),
+		_xyxy({{}, {_fm.get_dimensions().first, _fm.get_dimensions().second - 1}}) {}
 
 	void func(int arg)
 	{
 		for (int ii{}; ii < arg; ++ii)
 		{
-			_fm.update();
+			_fm.update(_xyxy);
 			if (!_fm)
 				this_fiber::resume_main();
 			std::this_thread::sleep_for(std::chrono::milliseconds(_sleepval));

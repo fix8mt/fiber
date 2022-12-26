@@ -46,16 +46,36 @@
 namespace FIX8 {
 
 //-----------------------------------------------------------------------------------------
+using xy_coord = std::pair<int, int>; // x,y
+using window_coord = std::pair<xy_coord, xy_coord>;
+
+struct window_frame : window_coord
+{
+	using window_coord::window_coord;
+	constexpr window_frame(xy_coord dim) : window_coord({{},{dim.first, dim.second}}) {}
+	xy_coord& upper() { return first; }
+	xy_coord& lower() { return second; }
+	constexpr xy_coord upper() const { return first; }
+	constexpr xy_coord lower() const { return second; }
+	constexpr bool empty() const { return *this == window_coord(); }
+};
+
 class fiber_monitor
 {
 public:
-	enum class sort_mode { by_sched, by_id, by_ms, by_tms, count };
+	enum class sort_mode { by_sched, by_id, by_ms, by_tms, by_name, by_flag, by_ctxsw, count };
+	static constexpr const std::array<const char *, static_cast<int>(sort_mode::count)>
+		_snames { "sched", "id", "time", "delta time", "name", "flag", "ctxswch" };
+
 private:
 	sort_mode _mode;
 	const std::chrono::milliseconds _timeout;
 	std::chrono::steady_clock::time_point _tp;
 	bool _quit{}, _pause{};
-	std::pair<int, int> _dimensions;
+	xy_coord _dimensions;
+#if defined FIX8_FIBER_MULTITHREADING_
+	f8_spin_lock _pre_spl;
+#endif
 
 public:
 	fiber_monitor(std::chrono::milliseconds timeout=std::chrono::milliseconds(1), sort_mode mode=sort_mode::by_id)
@@ -78,10 +98,7 @@ public:
 
 	void update_row(int row, int pos, bool iscurrent, const fiber_base& what) const
 	{
-		row %= (_dimensions.second - 2);
-		if (pos > _dimensions.second - 4)
-			++row;
-		tb_printf(pos < _dimensions.second - 3 ? 0 : _dimensions.first / 2, row, 0, iscurrent ? TB_BOLD|TB_RED : 0,
+		tb_printf(0, row, 0, iscurrent ? TB_BOLD|TB_RED : 0,
 			"%-4u %c %-4s %-4s %-4s %6u %6u %4u %#14lx %#14lx %6u %8u %7s %3u %15s",
 			pos, iscurrent ? '*' : ' ', what.get_id().to_string().c_str(), what.get_pid().to_string().c_str(),
 			what.get_prev_id().to_string().c_str(), what._ctxswtchs,
@@ -92,7 +109,7 @@ public:
 			what.get_flags_as_string().c_str(), what._params.launch_order, what._params.name);
 	}
 
-	void update(const fiber::cvars *vs=nullptr)
+	void update(window_frame winpos=window_frame(), const fiber::cvars *vs=nullptr)
 	{
 		if (static thread_local bool notfirst{}; std::exchange(notfirst, true))
 		{
@@ -103,17 +120,16 @@ public:
 		}
 
 		static constexpr const char *banner {
-			"#      fid  pfid prev  ctxsw  t(ms)   ^t      stack ptr    stack alloc  depth  stacksz   flags ord            name"};
+			"#      fid  pfid prev  ctxsw  t(ms)   ^t      stack ptr    stack alloc  depth  stacksz     flags ord            name"};
 
 		if (!_pause)
 		{
 			if (!vs)
 				vs = &fibers::const_get_vars();
-			tb_clear();
-			int y{}, pos{};
+			if (winpos.empty())
+				winpos = window_frame(_dimensions);
+			int y{winpos.upper().second}, pos{};
 			tb_printf(0, y++, TB_BOLD|TB_WHITE, TB_GREEN, banner);
-			if (vs->_uniq.size() > _dimensions.second - 2)
-				tb_printf(_dimensions.first / 2, 0, TB_BOLD|TB_WHITE, TB_GREEN, banner);
 			if (_mode == sort_mode::by_sched)
 			{
 				update_row(y++, pos++, true, *vs->_curr);
@@ -133,17 +149,38 @@ public:
 			{
 				struct tcmp
 				{
-					bool _way;
-					tcmp(bool way) : _way(way) {}
+					sort_mode _smode;
+					tcmp(sort_mode smode) : _smode(smode) {}
 					bool operator()(const fiber_base_ptr& lhs, const fiber_base_ptr& rhs) const
-						{ return _way ? lhs->_extime < rhs->_extime : lhs->_exdelta < rhs->_exdelta; }
+					{
+						switch(_smode)
+						{
+						case sort_mode::by_ms:
+							return lhs->_extime < rhs->_extime;
+						case sort_mode::by_tms:
+							return lhs->_exdelta < rhs->_exdelta;
+						case sort_mode::by_name:
+							return std::strcmp(lhs->_params.name, rhs->_params.name) < 0;
+						case sort_mode::by_flag:
+							return lhs->_flags.to_ulong() < rhs->_flags.to_ulong();
+						case sort_mode::by_ctxsw:
+							return lhs->_ctxswtchs < rhs->_ctxswtchs;
+						default:
+							break;
+						}
+						return false;
+					}
 				};
-				std::multiset<fiber_base_ptr, tcmp> tset(_mode == sort_mode::by_ms);
+				std::multiset<fiber_base_ptr, tcmp> tset(_mode);
 				for (const auto pp : vs->_uniq) // all fibers
 					tset.emplace(pp);
 				for (const auto& pp : tset)
 					update_row(y++, pos++, pp == vs->_curr, *pp);
 			}
+			// clear remaining window
+			for (int jj{y}; jj < winpos.lower().second; ++jj)
+				for (int kk{}; kk < winpos.lower().first; ++kk)
+					tb_set_cell(kk, jj, ' ', TB_DEFAULT, TB_DEFAULT);
 		}
 
 		if (tb_event event; tb_peek_event(&event, 0) != TB_ERR_NO_EVENT && event.type == TB_EVENT_KEY)
@@ -163,7 +200,10 @@ public:
 				break;
 			}
 		}
-		tb_printf(0, tb_height() - 1, 0, TB_GREEN, "<space> toggle sort mode(%d), <p> pause, <x> exit", static_cast<int>(_mode));
+		tb_printf(0, tb_height() - 1, 0, TB_GREEN, "<space> change sort mode(%s), <p> pause, <x> exit", _snames[static_cast<int>(_mode)]);
+#if defined FIX8_FIBER_MULTITHREADING_
+		f8_scoped_spin_lock guard(_pre_spl);
+#endif
 		tb_present();
 	}
 };

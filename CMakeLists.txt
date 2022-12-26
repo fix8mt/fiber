@@ -1,6 +1,6 @@
 # ----------------------------------------------------------------------------------------
 # fiber (header only)
-# Copyright (C) 2022 Fix8 Market Technologies Pty Ltd
+# Copyright (C) 2022-3 Fix8 Market Technologies Pty Ltd
 #   by David L. Dight
 # see https://github.com/fix8mt/f8fiber
 #
@@ -37,29 +37,22 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 project (f8fiber VERSION 2.0)
 
-include(FetchContent)
-FetchContent_Declare(Catch2 GIT_REPOSITORY https://github.com/catchorg/Catch2.git GIT_TAG v3.1.0)
-FetchContent_MakeAvailable(Catch2)
-
 include_directories(${CMAKE_SOURCE_DIR}/include)
-file(GLOB esrc "${CMAKE_SOURCE_DIR}/examples/f8*.cpp")
+set(exdir ${CMAKE_SOURCE_DIR}/examples)
+file(GLOB esrc CONFIGURE_DEPENDS "${exdir}/f8*.cpp")
 foreach(x ${esrc})
 	get_filename_component(fn ${x} NAME_WLE)
 	add_executable(${fn} ${x})
 endforeach()
-file(GLOB tsrc "${CMAKE_SOURCE_DIR}/test/*.cpp")
-foreach(x ${tsrc})
-	get_filename_component(fn ${x} NAME_WLE)
-	add_executable(${fn} ${x})
-endforeach()
 
-# cmake -DBUILD_MONITOR=true ..
-if(${BUILD_MONITOR})
+# to disable building monitor tests:
+# cmake -DBUILD_MONITOR=false ..
+if(NOT DEFINED BUILD_MONITOR OR BUILD_MONITOR)
 	include(ExternalProject)
 	ExternalProject_Add(termbox2
 		GIT_REPOSITORY https://github.com/termbox/termbox2.git
 		GIT_PROGRESS true
-		GIT_TAG v2.0.0
+		GIT_TAG master
 		UPDATE_DISCONNECTED true
 		CONFIGURE_COMMAND ""
 		BUILD_IN_SOURCE true
@@ -71,7 +64,7 @@ if(${BUILD_MONITOR})
 	ExternalProject_Add(gmp
 		GIT_REPOSITORY https://github.com/alisw/GMP.git
 		GIT_PROGRESS true
-		GIT_TAG v6.2.1
+		GIT_TAG master
 		UPDATE_DISCONNECTED true
 		CONFIGURE_COMMAND sh -c "./configure --enable-cxx -enable-alloca=alloca"
 		BUILD_IN_SOURCE true
@@ -81,16 +74,14 @@ if(${BUILD_MONITOR})
 	)
 	set(gmp ${CMAKE_CURRENT_BINARY_DIR}/gmp-prefix/src/gmp)
 
-	add_executable(montest1 ${CMAKE_SOURCE_DIR}/examples/montest1.cpp)
-	add_dependencies(montest1 termbox2)
-	target_include_directories(montest1 PRIVATE ${termbox2})
-	target_link_directories(montest1 PRIVATE ${termbox2})
-	target_link_libraries(montest1 PRIVATE termbox.a)
-
-	add_executable(montest2 ${CMAKE_SOURCE_DIR}/examples/montest2.cpp)
-	add_dependencies(montest2 termbox2 gmp)
-	target_include_directories(montest2 PRIVATE ${termbox2} ${gmp})
-	target_link_directories(montest2 PRIVATE ${termbox2} ${gmp}/.libs)
-	target_link_libraries(montest2 PRIVATE termbox.a gmpxx.a gmp.a)
+	file(GLOB msrc CONFIGURE_DEPENDS "${exdir}/montest*.cpp")
+	foreach(x ${msrc})
+		get_filename_component(fn ${x} NAME_WLE)
+		add_executable(${fn} ${x})
+		add_dependencies(${fn} termbox2 gmp)
+		target_include_directories(${fn} PRIVATE ${termbox2} ${gmp})
+		target_link_directories(${fn} PRIVATE ${termbox2} ${gmp}/.libs)
+		target_link_libraries(${fn} PRIVATE termbox.a gmpxx.a gmp.a)
+	endforeach()
 endif()
 

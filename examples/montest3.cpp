@@ -33,131 +33,138 @@
 //
 // Monitor test using:
 //
-// GNU multiple precision arithmetic library, version 6.2.1.
-// 	Copyright 1991, 1993-2016, 2018-2020 Free Software Foundation, Inc.
 // Termbox2
 //		MIT License
 // 	Copyright (c) 2010-2020 nsf <no.smile.face@gmail.com>
 //		              2015-2022 Adam Saponara <as@php.net>
-//----------------------------------------------------------------------------------------
-
+//-----------------------------------------------------------------------------------------
 #include <iostream>
-#include <fstream>
 #include <chrono>
 #include <thread>
 #include <random>
 #include <fix8/f8fiber.hpp>
 #include <fix8/f8fibermonitor.hpp>
-#include <getopt.h>
-#include <gmpxx.h>
+#include <unistd.h>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
 using namespace std::literals;
 
 //-----------------------------------------------------------------------------------------
-class foo : public fiber_monitor
+class foo
 {
-	std::mt19937_64 _rnde {std::random_device{}()};
-	std::uniform_int_distribution<long> _exp;
-	bool _todisk;
+	fiber_monitor& _fm;
+	int _sleepval;
+	window_frame _xyxy;
 
 public:
-	foo(int interval, long maxexp, bool todisk) :
-		fiber_monitor(std::chrono::milliseconds(interval), fiber_monitor::sort_mode::by_ms),
-		_exp{1, maxexp}, _todisk(todisk) {}
+	foo(fiber_monitor& fm, int sleepval, bool first) : _fm(fm), _sleepval(sleepval)
+	{
+		auto [x, y] { _fm.get_dimensions() };
+		_xyxy = first ? window_frame({{}, {x, y / 2 - 1}}) : window_frame({{0, y / 2}, {x, y}});
+	}
 
 	void func(int arg)
 	{
-		std::unique_ptr<std::ofstream> ofstr { _todisk ? std::make_unique<std::ofstream>(
-			std::string { "worker"s + std::to_string(arg) + ".out" }.c_str(), std::ios::trunc) : nullptr };
-
-		for (int ii{}; ii < 10 + arg; ++ii)
+		for (int ii{}; ii < arg; ++ii)
 		{
-			auto expv { _exp(_rnde) }; // obtain our exponent
-			std::ostringstream ostr;
-			ostr << "2^" << expv;
-			this_fiber::name(ostr.str().c_str());
-			update();
-			mpz_class pr;
-			mpz_ui_pow_ui(pr.get_mpz_t(), 2, expv); // raise 2^expv
-			if (ofstr)
-				*ofstr << ostr.str() << " = " << pr << '\n';
-			update();
-			is_quit() ? this_fiber::resume_main() : this_fiber::yield(); // user pressed 'x'?
+			_fm.update(_xyxy);
+			if (!_fm)
+				this_fiber::resume_main();
+			std::this_thread::sleep_for(std::chrono::milliseconds(_sleepval));
+			this_fiber::yield();
 		}
-		this_fiber::name("finished");
 	}
 };
 
 //-----------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
-	int interval{}, fcnt{20}, val;
-	long maxexp{4999999999L};
-	bool todisk{}, threaded{};
-
-	option long_options[]
-	{
-		{ "help",		no_argument,			nullptr, 'h' },
-		{ "write",		no_argument,			nullptr, 'w' },
-		{ "fibers",		required_argument,	nullptr, 'f' },
-		{ "maxexp",		required_argument,	nullptr, 'm' },
-		{ "interval",	required_argument,	nullptr, 'i' },
-		{},
-	};
-
-	static constexpr const char *optstr{"f:i:hm:w"};
-	while ((val = getopt_long (argc, argv, optstr, long_options, 0)) != -1)
+	int interval{100}, sleepval{50};
+	bool lorder(true);
+	static constexpr const char *optstr{"i:s:oh"};
+	for (int opt; (opt = getopt(argc, argv, optstr)) != -1;)
 	{
 		try
 		{
-			switch (val)
+			switch (opt)
 			{
+			case 's':
+				sleepval = std::stoi(optarg);
+				break;
+			case 'o':
+				lorder = false;
+				break;
+			case 'i':
+				interval = std::stoi(optarg);
+				break;
 			case ':': case '?':
 				std::cout << '\n';
 				[[fallthrough]];
 			case 'h':
 				std::cout << "Usage: " << argv[0] << " [-" << optstr << "]" << R"(
-  -w write results to disk files (default false)
-  -i interval msecs (default 0)
-  -f fiber count (default 20)
-  -m max exponent (default 4999999999)
+  -i interval msecs (default 100)
+  -s sleep msecs (default 50)
+  -o no launch order
   -h help)" << std::endl;
-			  return 0;
-			case 'w': todisk = true; break;
-			case 'm': maxexp = std::stol(optarg); break;
-			case 'f': fcnt = std::stoi(optarg); break;
-			case 'i': interval = std::stoi(optarg); break;
-			default: break;
+				exit(1);
+			default:
+				break;
 			}
 		}
 		catch (const std::exception& e)
 		{
-			std::cerr << optarg << ": error: invalid value for switch \'"
-				<< static_cast<char>(val) << "\' (" << e.what() << ')' << std::endl;
-			return 1;
+			std::cerr << "exception: " << e.what() << std::endl;
+			exit(1);
 		}
 	}
-	if (todisk && maxexp == 4999999999L)
-		maxexp = 10000000L;
 
-	foo bar(interval, maxexp, todisk);
-	std::vector<std::unique_ptr<fiber>> fbs;
-	for (int ii{}; ii < fcnt; ++ii)
-		fbs.emplace_back(std::make_unique<fiber>(fiber_params{.launch_order=ii}, &foo::func, &bar, ii));
-	fibers::set_flag(global_fiber_flags::retain);
-
-	while (fibers::has_fibers())
+	fiber_monitor fm{std::chrono::milliseconds(interval)};
+	std::thread::id id0, id1;
+	auto func([&](std::thread::id& oid, bool first=false)
 	{
-		if (!bar)
+		foo bar(fm, sleepval, first);
+		int fcnt { fm.get_dimensions().second / 2 - 6 };
+		//int fcnt { fm.get_dimensions().second / 2 - 3 };
+		std::vector<std::unique_ptr<fiber>> fbs;
+		for (int ii{}; ii < fcnt; ++ii)
 		{
-			fibers::kill_all();
-			break;
+			std::ostringstream ostr;
+			ostr << (first ? 'A' : 'B') << std::setfill('0') << std::setw(2) << ii;
+			fbs.emplace_back(std::make_unique<fiber>(fiber_params{.launch_order=lorder ? ii : 99,.stacksz=8192},
+				&foo::func, &bar, 5 * (1 + (ii % 8))))->set_params(ostr.str());
 		}
-		this_fiber::yield();
-	}
-	bar.update();
-	std::this_thread::sleep_for(3s);
+		std::mt19937_64 rnde {std::random_device{}()};
+		for (int ii{}; fibers::has_fibers(); ++ii)
+		{
+			if (!fm)
+			{
+				fibers::kill_all();
+				break;
+			}
+			else if (std::uniform_int_distribution<int>(0, 5)(rnde) == 1)
+			{
+				auto& cvs { fibers::const_get_vars() };
+				while(cvs.size())
+				{
+					if (auto ptr { cvs[std::uniform_int_distribution<int>(0, cvs.size() - 1)(rnde)] }; ptr && !ptr->is_main())
+					{
+						fibers::move(oid, ptr);
+						break;
+					}
+				}
+			}
+			else
+				this_fiber::yield();
+		}
+	});
+	std::thread t1(func, std::ref(id1), true), t2(std::bind(func, std::ref(id0)));
+	id0 = t1.get_id();
+	id1 = t2.get_id();
+	t1.join();
+	t2.join();
+
+	fm.update();
+	std::this_thread::sleep_for(1s);
 	return 0;
 }

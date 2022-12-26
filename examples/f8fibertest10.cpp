@@ -13,24 +13,22 @@ int main()
 	{
 		static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
 		{{
-			{	R"("I)",		"all",	"said",	"It’s",		"I’m",		"\n  –",		},
+			{	R"("I)",		"all",	"said",	"It’s",		"I’m",		"\n –",		},
 			{	"am",			"of",		"no",		"because",	"doing",		"Albert",	},
 			{	"thankful",	"those",	"to",		"of",			"it",			"Einstein"	},
-			{	"for",		"who",	"me.",	"them",		"myself.\"",				},
+			{	"for",		"who",	"me.",	"them",		R"(myself.")",				},
 		}};
-		int order{};
 		for (const auto& pp : wordset)
 		{
-			fiber ({.launch_order=order++}, [](const auto& words)
+			fiber ([](const auto& words)
 			{
-				for (const auto& pp : words)
+				for (const auto& qq : words)
 				{
-					std::cout << pp << ' ';
+					std::cout << qq << ' ';
 					this_fiber::yield();
 				}
-			},pp).detach();
+			}, pp).detach();
 		}
-		fibers::print();
 	}).join();
 
 	std::cout << std::endl;

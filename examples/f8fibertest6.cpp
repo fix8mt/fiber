@@ -1,5 +1,6 @@
 #include <iostream>
 #include <thread>
+#define FIBER_NO_MULTITHREADING
 #include <fix8/f8fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
@@ -31,8 +32,6 @@ int test()
 		int ii{};
 		do print_b(); while (ii++ < 1000);
 	}).detach();
-
-	fibers::print();
 	return 0;
 }
 

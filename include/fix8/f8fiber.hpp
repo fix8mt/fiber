@@ -1,6 +1,6 @@
 //-----------------------------------------------------------------------------------------
 // fiber (header only)
-// Copyright (C) 2022 Fix8 Market Technologies Pty Ltd
+// Copyright (C) 2022-3 Fix8 Market Technologies Pty Ltd
 //   by David L. Dight
 // see https://github.com/fix8mt/f8fiber
 //
@@ -45,6 +45,8 @@
 #include <type_traits>
 #include <future>
 #include <deque>
+#include <array>
+#include <unordered_map>
 #include <chrono>
 #include <algorithm>
 #include <cstring>
@@ -53,8 +55,10 @@
 #include <bitset>
 #include <mutex>
 #include <utility>
+#include <thread>
 #include <condition_variable>
 #include <set>
+#include <unordered_set>
 #include <fcntl.h>
 #include <sys/resource.h>
 #include <sys/mman.h>
@@ -63,16 +67,24 @@
 #include <pthread.h>
 
 //-----------------------------------------------------------------------------------------
-#if !defined SIGSTKSZ
-# define SIGSTKSZ 131072 // 128kb recommended
+// default fiber stack size; define in your app to override or set in ctor
+#if !defined DEFSTKSZ
+# define DEFSTKSZ 131072 // 128kb recommended
 #endif
+// default fiber name length
 #if !defined FIBERNAMELEN
 # define FIBERNAMELEN 16 // including null terminator
 #endif
 
+// define FIBER_NO_INSTRUMENTATION to disable instrumentation and printing
 // if not defined, all instrumentation and printing is enabled (default)
 #if !defined FIBER_NO_INSTRUMENTATION
-#define FIX8_FIBER_INSTRUMENTATION_
+# define FIX8_FIBER_INSTRUMENTATION_
+#endif
+// define FIBER_NO_MULTITHREADING to disable multi-threading support
+// if not defined, multi-threading support is enabled (default)
+#if !defined FIBER_NO_MULTITHREADING
+# define FIX8_FIBER_MULTITHREADING_
 #endif
 
 //-----------------------------------------------------------------------------------------
@@ -89,14 +101,47 @@ protected:
 };
 #endif
 
+#if !defined f8_spin_lock && defined FIX8_FIBER_MULTITHREADING_
+#include <atomic>
+class f8_spin_lock
+{
+	std::atomic_flag _sl
+#if __cplusplus < 202002L
+			= ATOMIC_FLAG_INIT
+#endif
+		;
+public:
+	void lock() noexcept { while (!try_lock()); }
+	bool try_lock() noexcept { return !_sl.test_and_set(std::memory_order_acquire); }
+	void unlock() noexcept { _sl.clear(std::memory_order_release); }
+};
+
+template<typename T>
+class f8_scoped_lock_impl
+{
+	T& _local_mutex;
+
+public:
+	f8_scoped_lock_impl(T& mutex) noexcept : _local_mutex(mutex) { _local_mutex.lock(); }
+	~f8_scoped_lock_impl() { release(); }
+	void release() noexcept { _local_mutex.unlock(); }
+
+	f8_scoped_lock_impl() = delete;
+	f8_scoped_lock_impl(const f8_scoped_lock_impl&) = delete;
+	f8_scoped_lock_impl& operator=(const f8_scoped_lock_impl&) = delete;
+};
+
+using f8_scoped_spin_lock = f8_scoped_lock_impl<f8_spin_lock>;
+#endif
+
 //-----------------------------------------------------------------------------------------
 /// unique fiber id
 class fiber_id
 {
-	const void *_ptr{ nullptr };
+	const void *_ptr{};
 
 public:
-	fiber_id() = default;
+	fiber_id() noexcept = default;
 	explicit fiber_id(const void *ptr) noexcept : _ptr{ ptr } {}
 
 #if __cplusplus >= 202002L
@@ -143,27 +188,40 @@ public:
 	static fiber_id get_prev_id() noexcept;
 #endif
 	static fiber_id get_pid() noexcept;
-	static const char *name(const char *what=nullptr) noexcept;
+	static const char *name(const char *what) noexcept;
+	static const char *name() noexcept;
+#if defined FIX8_FIBER_MULTITHREADING_
+	static void move(std::thread::id id);
+#endif
 	static void yield() noexcept;
 	static void resume_main() noexcept;
+	static void schedule_main() noexcept;
 	template<typename Clock, typename Duration>
 	static void sleep_until(const std::chrono::time_point<Clock, Duration>& sltime);
 	template<typename Rep, typename Period>
 	static void sleep_for(const std::chrono::duration<Rep, Period>& retime);
 };
 
+using fiber_base_ptr = std::shared_ptr<class fiber_base>;
+
 class f8_fibers : protected f8_nonconstructible
 {
 public:
 	static int size() noexcept;
+	static int size_detached() noexcept;
 	static bool has_fibers() noexcept;
 	static void set_flag(global_fiber_flags flag) noexcept;
 	static void reset_flag(global_fiber_flags flag) noexcept;
 	static void sort() noexcept;
+	static bool terminating() noexcept;
 #if defined FIX8_FIBER_INSTRUMENTATION_
 	static void print(std::ostream& os) noexcept;
 #endif
 	static int kill_all() noexcept;
+#if defined FIX8_FIBER_MULTITHREADING_
+	static void move(std::thread::id id, fiber_base_ptr ptr);
+	static void move(std::thread::id id, const class fiber& fb);
+#endif
 };
 
 //-----------------------------------------------------------------------------------------
@@ -192,12 +250,12 @@ class alignas(16) f8_stack
 {
 protected:
 	char *_ptr{};
-	std::size_t _size{SIGSTKSZ};
+	std::size_t _size{DEFSTKSZ};
 
 public:
-	f8_stack() = default;
+	f8_stack() noexcept = default;
 	virtual ~f8_stack() { deallocate(); }
-	f8_stack(f8_stack&&) = default;
+	f8_stack(f8_stack&&) noexcept = default;
 
 	f8_stack(f8_stack&) = delete;
 	f8_stack& operator=(f8_stack&) = delete;
@@ -290,15 +348,22 @@ public:
 //-----------------------------------------------------------------------------------------
 enum class stack_type { heap, mapped, placement };
 
+template<typename T, typename... Args>
+constexpr f8_stack_ptr make_stack(Args&&... args)
+{
+	static_assert(std::is_base_of_v<f8_stack, T>);
+	return std::make_unique<T>(std::forward<Args>(args)...);
+}
+
 template<stack_type type, typename... Args>
 constexpr f8_stack_ptr make_stack(Args&&... args)
 {
 	if constexpr (type == stack_type::heap)
-		return f8_stack_ptr(new f8_fixedsize_heap_stack(std::forward<Args>(args)...));
+		return make_stack<f8_fixedsize_heap_stack>(std::forward<Args>(args)...);
 	if constexpr (type == stack_type::mapped)
-		return f8_stack_ptr(new f8_fixedsize_mapped_stack(std::forward<Args>(args)...));
+		return make_stack<f8_fixedsize_mapped_stack>(std::forward<Args>(args)...);
 	if constexpr (type == stack_type::placement)
-		return f8_stack_ptr(new f8_fixedsize_placement_stack(std::forward<Args>(args)...));
+		return make_stack<f8_fixedsize_placement_stack>(std::forward<Args>(args)...);
 }
 
 //-----------------------------------------------------------------------------------------
@@ -308,7 +373,7 @@ struct alignas(16) fiber_params final
 	const char name[FIBERNAMELEN]{};
 	bool join{};
 	// these next values can't be modified once the fiber has been created
-	const size_t stacksz{SIGSTKSZ};
+	const size_t stacksz{DEFSTKSZ};
 	const launch policy{launch::post};
 	f8_stack_ptr stack{make_stack<stack_type::heap>()};
 };
@@ -326,7 +391,7 @@ class alignas(16) fiber_base
 	unsigned _ctxswtchs{};
 	std::chrono::nanoseconds _extime{}, _exdelta{};
 #endif
-	enum fiber_flags { main, finished, suspended, dispatched, detached, notstarted, joinonexit, fiber_flags_count }; // mfspdnj
+	enum fiber_flags { main, finished, suspended, dispatched, detached, notstarted, joinonexit, transfer, moved, fiber_flags_count }; // mfspdnjtv
 	std::bitset<fiber_flags_count> _flags;
 	std::chrono::steady_clock::time_point _tp{};
 	std::condition_variable _cv_join;
@@ -335,8 +400,11 @@ class alignas(16) fiber_base
 	template<typename Wrapper>
 	static void trampoline(void *ptr) noexcept;
 
-	// asm stack switch routine
+	// [asm] stack switch routine
 	static void coroswitch(fiber_base *old, fiber_base *newer) noexcept asm("_coroswitch");
+
+	// [asm] obtain fpu/sse flags
+	static uint64_t getfpumxflags() noexcept asm("_getflags");
 
 	static size_t get_default_stacksz()
 	{
@@ -357,6 +425,7 @@ class alignas(16) fiber_base
 		callable_wrapper(Fn&& func) noexcept : _func(std::forward<Fn>(func)) {}
 	};
 
+	// stack: trampoline,fiber func,rdi,rbp,r12,r13,r14,r15,fpu/sse flags
 	template<typename Fn>
 	void setup_continuation(Fn&& func) noexcept
 	{
@@ -364,7 +433,8 @@ class alignas(16) fiber_base
 		*--_stk = reinterpret_cast<uintptr_t>(trampoline<callable_wrapper<Fn>>);
 		*--_stk = reinterpret_cast<uintptr_t>(new (reinterpret_cast<char*>(_stk_alloc) + sizeof(fiber_base))
 			callable_wrapper(std::forward<Fn>(func))); // store at bottom of stack
-		std::fill(_stk -= 7, _stk, 0x0);
+		std::fill(_stk -= 6, _stk, 0x0);
+		*--_stk = getfpumxflags(); // preserve fpu/sse flags
 	}
 
 	fiber_base() noexcept : _stacksz{get_default_stacksz()},
@@ -391,7 +461,7 @@ public:
 #endif
 	constexpr fiber_id get_pid() const noexcept { return _pfid; }
 
-	const char *name(const char *what=nullptr)
+	const char *name(const char *what)
 	{
 		if (what && !is_main()) // you can't name main
 		{
@@ -402,12 +472,13 @@ public:
 		}
 		return _params.name;
 	}
+	constexpr const char *name() const noexcept { return _params.name; }
 	int order(int ord) noexcept { return _params.launch_order = ord; }
 
 #if defined FIX8_FIBER_INSTRUMENTATION_
 	std::string get_flags_as_string() const noexcept
 	{
-		static constexpr const char flagstrs[]{"mfspdnj"};
+		static constexpr const char flagstrs[fiber_flags_count+1]{"mfspdnjtv"};
 		char str[_flags.size() + 1]{};
 		for (int ii{}; ii < _flags.size(); ++ii)
 			str[ii] = _flags.test(ii) ? flagstrs[ii] : '_';
@@ -421,20 +492,21 @@ public:
 	constexpr bool is_suspended() const noexcept { return _flags[fiber_flags::suspended]; };
 	constexpr bool is_joinonexit() const noexcept { return _flags[fiber_flags::joinonexit]; };
 	constexpr bool is_dispatched() const noexcept { return _flags[fiber_flags::dispatched]; };
+	constexpr bool is_transfering() const noexcept { return _flags[fiber_flags::transfer]; };
+	constexpr bool is_moved() const noexcept { return _flags[fiber_flags::moved]; };
 
 #if defined FIX8_FIBER_INSTRUMENTATION_
 	friend std::ostream& operator<<(std::ostream& os, const fiber_base& what);
 	friend class fiber_monitor;
 #endif
 	friend class fiber;
+	friend class jfiber;
 	friend f8_this_fiber;
 	friend f8_fibers;
 };
 
-using fiber_base_ptr = std::shared_ptr<fiber_base>;
-
 //-----------------------------------------------------------------------------------------
-// static void fiber_base::coroswitch(fiber_base *old, fiber_base *newer) noexcept;
+// static void fiber_base::coroswitch(fiber_base *old, fiber_base *newer) noexcept; //aka _coroswitch
 asm(R"(.text
 .align 16
 .type _coroswitch,@function
@@ -474,6 +546,22 @@ _doswitch:
 )");
 
 //-----------------------------------------------------------------------------------------
+//	static uint64_t fiber_base::getfpumxflags() noexcept; //aka _getflags
+asm(R"(.text
+.align 16
+.type _getflags,@function
+_getflags:
+	subq $0x8,%rsp
+   stmxcsr (%rsp)
+   fnstcw 4(%rsp)
+	movq (%rsp),%rax
+	addq $0x8,%rsp
+   ret
+.size _getflags,.-_getflags
+.section .note.GNU-stack,"",%progbits
+)");
+
+//-----------------------------------------------------------------------------------------
 class alignas(16) fiber
 {
 	fiber_base_ptr _ctx;
@@ -486,13 +574,16 @@ class alignas(16) fiber
 public:
 	struct cvars final
 	{
-		std::set<fiber_base_ptr> _uniq, _det;
+		std::unordered_set<fiber_base_ptr> _uniq, _det;
 		std::deque<fiber_base_ptr> _sched;
 		fiber_base_ptr _curr;
 		const fiber_base_ptr _main;
 		bool _term;
 		std::chrono::time_point<std::chrono::system_clock> _now;
 		std::bitset<static_cast<int>(global_fiber_flags::count)> _gflags;
+		fiber_base_ptr operator[](unsigned idx) const { return idx < _sched.size() ? _sched[idx] : fiber_base_ptr(); }
+		fiber_base_ptr& operator[](unsigned idx) { return _sched[idx]; }
+		size_t size() const { return _sched.size(); }
 
 		cvars(const cvars&) = delete;
 		cvars(cvars&&) = delete;
@@ -501,7 +592,101 @@ public:
 		~cvars() noexcept;
 	};
 
+#if defined FIX8_FIBER_MULTITHREADING_
+	class all_cvars final
+	{
+		mutable f8_spin_lock _tvs_spl;
+		std::unordered_map<std::thread::id, cvars *> _tvs;
+		std::unordered_multimap<std::thread::id, fiber_base_ptr> _trf;
+
+	public:
+		all_cvars() noexcept = default;
+		all_cvars(const all_cvars&) = delete;
+		all_cvars(all_cvars&&) = delete;
+		all_cvars& operator=(const all_cvars&) = delete;
+		all_cvars& operator=(all_cvars&&) = delete;
+
+		size_t size()
+		{
+			f8_scoped_spin_lock guard(_tvs_spl);
+			return _tvs.size();
+		}
+		bool insert(std::thread::id id, cvars *var)
+		{
+			f8_scoped_spin_lock guard(_tvs_spl);
+			return _tvs.emplace(id, var).second;
+		}
+		bool remove(std::thread::id id)
+		{
+			f8_scoped_spin_lock guard(_tvs_spl);
+			return _tvs.erase(id) > 0;
+		}
+		cvars *get(std::thread::id id) // ptr is not thread safe
+		{
+			f8_scoped_spin_lock guard(_tvs_spl);
+			auto result { _tvs.find(id) };
+			return result != _tvs.end() ? result->second : nullptr;
+		}
+		const cvars *get(std::thread::id id) const // ptr is not thread safe
+		{
+			f8_scoped_spin_lock guard(_tvs_spl);
+			auto result { _tvs.find(id) };
+			return result != _tvs.cend() ? result->second : nullptr;
+		}
+		void queue_move(std::thread::id id, fiber_base_ptr ptr) // transfer from this thread to other thread
+		{
+			if (id == std::this_thread::get_id())
+				throw fiber_error { std::make_error_code(std::errc::invalid_argument),
+					"target thread same as source thread" };
+			else if (!ptr)
+				throw fiber_error { std::make_error_code(std::errc::invalid_argument),
+					"invalid fiber" };
+			else if (id == std::thread::id()) // empty id
+				throw fiber_error { std::make_error_code(std::errc::invalid_argument),
+					"invalid id" };
+			else if (f8_scoped_spin_lock guard(_tvs_spl); _tvs.find(id) != _tvs.cend())
+			{
+				ptr->_flags.set(fiber_base::fiber_flags::transfer);
+				GetVar(_uniq).erase(ptr);
+				_trf.emplace(id, ptr);
+				guard.release();
+				f8_this_fiber::yield();
+			}
+			/*else
+				throw fiber_error { std::make_error_code(std::errc::invalid_argument),
+					"thread not running" };*/
+		}
+		int move() // process transfers to this thread
+		{
+			int result{};
+			f8_scoped_spin_lock guard(_tvs_spl);
+			if (auto rng { _trf.equal_range(std::this_thread::get_id()) }; rng.first != rng.second)
+			{
+				GetVars();
+				do
+				{
+					uni.insert(rng.first->second);
+					sch.push_back(rng.first->second);
+					++result;
+				}
+				while (++rng.first != rng.second);
+				sort_queue(sch);
+				_trf.erase(std::this_thread::get_id());
+			}
+			return result;
+		}
+	};
+#endif
+
 private:
+#if defined FIX8_FIBER_MULTITHREADING_
+	static all_cvars& get_all_cvars() noexcept
+	{
+		static all_cvars _allcvars; // per process singleton
+		return _allcvars;
+	}
+#endif
+
 	static cvars& get_vars() noexcept
 	{
 		static thread_local fiber_base _main_ctx;
@@ -511,6 +696,12 @@ private:
 			._uniq={_main_ctx_ptr},._curr=_main_ctx_ptr,._main=_main_ctx_ptr,
 			._term=false,._now=std::chrono::system_clock::now()
 		};
+#if defined FIX8_FIBER_MULTITHREADING_
+		static thread_local bool _register_cvars([]() // register this thread
+		{
+			return get_all_cvars().insert(std::this_thread::get_id(), &_cvars);
+		}());
+#endif
 		return _cvars;
 	}
 
@@ -523,7 +714,7 @@ private:
 	}
 	static void sort_queue(std::deque<fiber_base_ptr>& sch) noexcept
 	{
-		std::sort(sch.begin(), sch.end(), [](const fiber_base_ptr& p1, const fiber_base_ptr& p2)
+		std::stable_sort(sch.begin(), sch.end(), [](const fiber_base_ptr& p1, const fiber_base_ptr& p2)
 		{
 			return p1->_params.launch_order < p2->_params.launch_order;
 		});
@@ -531,18 +722,18 @@ private:
 
 public:
 	template<typename Fn, typename... Args, std::enable_if_t<!std::is_bind_expression_v<Fn>,int> = 0>
-	fiber(Fn&& func, Args&&... args)
+	constexpr fiber(Fn&& func, Args&&... args)
 		: fiber({}, std::bind(std::forward<Fn>(func), std::forward<Args>(args)...)) {}
 
 	template<typename Fn, typename... Args, std::enable_if_t<!std::is_bind_expression_v<Fn>,int> = 0>
-	fiber(fiber_params&& params, Fn&& func, Args&&... args)
+	constexpr fiber(fiber_params&& params, Fn&& func, Args&&... args)
 		: fiber(std::move(params), std::bind(std::forward<Fn>(func), std::forward<Args>(args)...)) {}
 
 	template<typename Fn>
-	fiber(Fn&& func) : fiber({}, std::forward<Fn>(func)) {}
+	constexpr fiber(Fn&& func) : fiber({}, std::forward<Fn>(func)) {}
 
 	template<typename Fn>
-	fiber(fiber_params&& params, Fn&& func)
+	constexpr fiber(fiber_params&& params, Fn&& func)
 	{
 		uintptr_t *sp { reinterpret_cast<uintptr_t *>(params.stack->allocate(params.stacksz)) };
 		GetVars();
@@ -563,13 +754,15 @@ public:
 
 	~fiber()
 	{
-		if (joinable() && !is_detached())
+		if (joinable() && !is_detached() && !is_moved() && !is_transfering())
 		{
 			if (is_joinonexit())
 				join();
 			else
 				fiber_exit();
 		}
+		else if (is_moved())
+			_ctx->_flags.reset(fiber_base::fiber_flags::moved);
 	}
 
 	fiber(fiber_base_ptr from) noexcept : _ctx(std::move(from)) {}
@@ -649,7 +842,7 @@ public:
 			sch.swap(csched);
 			for (auto& pp : csched)
 				if (pp != _ctx) // remove from scheduler
-					sch.push_back(_ctx);
+					sch.push_front(_ctx);
 		}
 	}
 
@@ -692,14 +885,17 @@ public:
 		_ctx->_flags.set(fiber_base::fiber_flags::finished); // will not be scheduled again
 	}
 
-	void resume()
+	bool schedule(bool check=true)
 	{
-		if (!joinable())
-			throw fiber_error { std::make_error_code(std::errc::invalid_argument),
-				"fiber not joinable" };
-		else if (is_detached())
-			throw fiber_error { std::make_error_code(std::errc::invalid_argument),
-				"cannot resume detached fiber" };
+		if (check)
+		{
+			if (!joinable())
+				throw fiber_error { std::make_error_code(std::errc::invalid_argument),
+					"fiber not joinable" };
+			else if (is_detached())
+				throw fiber_error { std::make_error_code(std::errc::invalid_argument),
+					"cannot resume detached fiber" };
+		}
 		GetVars();
 		if (cur == _ctx)
 			throw fiber_error { std::make_error_code(std::errc::resource_deadlock_would_occur),
@@ -717,13 +913,23 @@ public:
 					}
 				}
 			}
-			f8_this_fiber::yield();
+			return true;
 		}
+		return false;
+	}
+	void resume(bool check=true)
+	{
+		if (schedule(check))
+			f8_this_fiber::yield();
 	}
 	void resume_if()
 	{
 		if (joinable() && !is_detached())
-			resume();
+			resume(false);
+	}
+	bool schedule_if()
+	{
+		return joinable() && !is_detached() ? schedule(false) : false;
 	}
 	template<typename Fn, typename... Args, std::enable_if_t<!std::is_bind_expression_v<Fn>,int> = 0>
 	void resume_with(Fn&& func, Args&&... args)
@@ -736,6 +942,12 @@ public:
 		resume();
 	}
 
+#if defined FIX8_FIBER_MULTITHREADING_
+	void move(std::thread::id id)
+	{
+		get_all_cvars().queue_move(id, _ctx);
+	}
+#endif
 	void swap(fiber& other) noexcept
 	{
 		if (_ctx != other._ctx)
@@ -748,30 +960,38 @@ public:
 
 #if defined FIX8_FIBER_INSTRUMENTATION_
 	static const cvars& const_get_vars() noexcept { return get_vars(); }
+#if defined FIX8_FIBER_MULTITHREADING_
+	static const all_cvars& const_get_all_cvars() noexcept { return get_all_cvars(); }
 #endif
-
+#endif
 	bool joinable() const noexcept { return _ctx->joinable(); }
 	bool is_main() const noexcept { return _ctx->is_main(); }
 	bool is_detached() const noexcept { return _ctx->is_detached(); }
 	bool is_suspended() const noexcept { return _ctx->is_suspended(); };
 	bool is_joinonexit() const noexcept { return _ctx->is_joinonexit(); }
 	bool is_dispatched() const noexcept { return _ctx->is_dispatched(); }
+	bool is_transfering() const noexcept { return _ctx->is_transfering(); }
+	bool is_moved() const noexcept { return _ctx->is_moved(); }
 	explicit operator bool() const noexcept { return joinable(); }
 	bool operator! () const noexcept { return !joinable(); }
 
-	const char *name(const char *what=nullptr) noexcept { return _ctx->name(what); }
+	const char *name(const char *what) noexcept { return _ctx->name(what); }
+	const char *name() noexcept { return _ctx->name(); }
 	int order(int ord=99) noexcept { return ord == 99 ? _ctx->_params.launch_order : _ctx->_params.launch_order = ord; }
 	fiber_id get_id() const noexcept { return _ctx->get_id(); }
 	fiber_id get_pid() const noexcept { return _ctx->get_pid(); }
+	fiber_base_ptr get_ctx() noexcept { return _ctx; }
 
 #if defined FIX8_FIBER_INSTRUMENTATION_
 	fiber_id get_prev_id() const noexcept { return _ctx->get_prev_id(); }
+	int get_ctxswtchs() const noexcept { return _ctx->_ctxswtchs; }
 	friend std::ostream& operator<<(std::ostream& os, const fiber_base& what);
 	friend std::ostream& operator<<(std::ostream& os, const fiber& what) { return os << *what._ctx; }
 #endif
 	friend f8_this_fiber;
 	friend f8_fibers;
 	friend fiber_base;
+	friend class jfiber;
 };
 
 inline void swap(fiber& first, fiber& second) noexcept
@@ -794,11 +1014,7 @@ void fiber_base::trampoline(void *ptr) noexcept
 	if (!sch.empty())
 		f8_this_fiber::yield();
 	if (!det.empty()) // pickup temporarily detached main
-	{
-		auto dt { det.begin() };
-		det.erase(dt);
-		fiber_base::coroswitch(cur.get(), dt->get());
-	}
+		fiber_base::coroswitch(cur.get(), (det.begin())->get());
 	fiber::fiber_exit();
 }
 
@@ -809,7 +1025,7 @@ fiber::cvars::~cvars() noexcept
 	if (!_det.empty())
 	{
 		for (auto& pp : _det) // place detached back on scheduler
-			_sched.emplace_back(pp);
+			_sched.emplace_front(pp);
 		_det.clear();
 		sort_queue(_sched);
 	}
@@ -821,6 +1037,9 @@ fiber::cvars::~cvars() noexcept
 				pp->_flags.reset(fiber_base::fiber_flags::suspended);
 		f8_this_fiber::yield();
 	}
+#if defined FIX8_FIBER_MULTITHREADING_
+	get_all_cvars().remove(std::this_thread::get_id()); // deregister this thread
+#endif
 }
 
 //-----------------------------------------------------------------------------------------
@@ -828,28 +1047,20 @@ fiber::cvars::~cvars() noexcept
 // uses std::invoke_result (std::result_of is deprecated)
 // policy must be launch::dispatch
 template<typename Fn, typename... Args>
-std::future<typename std::invoke_result_t<typename std::decay_t<Fn>,typename std::decay_t<Args>...>>
-async(Fn&& fn, Args... args)
+std::future<typename std::invoke_result_t<typename std::decay_t<Fn>, typename std::decay_t<Args>...>>
+constexpr async(fiber_params&& params, Fn&& fn, Args... args)
 {
 	using result_type = typename std::invoke_result_t<typename std::decay_t<Fn>,typename std::decay_t<Args>...>;
 	std::packaged_task<result_type(typename std::decay_t<Args>...)> task { std::forward<Fn>(fn) };
 	std::future<result_type> fut { task.get_future() };
-	fiber({.policy=launch::dispatch}, std::move(task), std::forward<Args>(args)...).detach();
+	const_cast<launch&>(params.policy) = launch::dispatch;
+	fiber(std::move(params), std::move(task), std::forward<Args>(args)...).detach();
 	return fut;
 }
 
 template<typename Fn, typename... Args>
-std::future<typename std::invoke_result_t<typename std::decay_t<Fn>,typename std::decay_t<Args>...>>
-async(fiber_params&& params, Fn&& fn, Args... args)
-{
-	using result_type = typename std::invoke_result_t<typename std::decay_t<Fn>,typename std::decay_t<Args>...>;
-	std::packaged_task<result_type(typename std::decay_t<Args>...)> task { std::forward<Fn>(fn) };
-	std::future<result_type> fut { task.get_future() };
-	fiber({.launch_order=params.launch_order,.name=std::move(params.name),.join=params.join,
-		.stacksz=params.stacksz,.policy=launch::dispatch,.stack=std::move(params.stack)},
-		std::move(task), std::forward<Args>(args)...).detach();
-	return fut;
-}
+std::future<typename std::invoke_result_t<typename std::decay_t<Fn>, typename std::decay_t<Args>...>>
+constexpr async(Fn&& fn, Args... args) { return async({}, std::forward<Fn>(fn), std::forward<Args>(args)...); }
 
 //-----------------------------------------------------------------------------------------
 #if defined FIX8_FIBER_INSTRUMENTATION_
@@ -867,7 +1078,7 @@ std::ostream& operator<<(std::ostream& os, const fiber_base& what)
 									 / sizeof(uintptr_t) - 1) - reinterpret_cast<unsigned long>(what._stk)) : 0)
 		<< ' ' << std::right << std::setw(8) << what._stacksz
 		<< ' ' << what.get_flags_as_string() << std::setw(4) << std::dec << what._params.launch_order
-		<< ' ' << what._params.name; //  << " (" << reinterpret_cast<const void*>(what.name) << ')';
+		<< ' ' << what._params.name;
 	return os;
 }
 #endif
@@ -879,9 +1090,19 @@ fiber_id f8_this_fiber::get_prev_id() noexcept { return ConstGetVar(_curr)->get_
 #endif
 fiber_id f8_this_fiber::get_pid() noexcept { return ConstGetVar(_curr)->get_pid(); }
 
+#if defined FIX8_FIBER_MULTITHREADING_
+void f8_this_fiber::move(std::thread::id id)
+{
+	fiber::get_all_cvars().queue_move(id, GetVar(_curr));
+}
+#endif
+
 void f8_this_fiber::yield() noexcept
 {
 	GetVars();
+#if defined FIX8_FIBER_MULTITHREADING_
+	fiber::get_all_cvars().move(); // process transfers to this thread
+#endif
 	while (!sch.empty())
 	{
 		auto front { sch.front() };
@@ -917,10 +1138,14 @@ void f8_this_fiber::yield() noexcept
 			cur->_prev_fiber = front->get_id();
 			++cur->_ctxswtchs;
 #endif
-
 			if (cur->_flags[fiber_base::fiber_flags::notstarted])
 				cur->_flags.reset(fiber_base::fiber_flags::notstarted);
 			sch.push_back(front);
+			if (front->_flags[fiber_base::fiber_flags::transfer])
+			{
+				front->_flags.reset(fiber_base::fiber_flags::transfer);
+				front->_flags.set(fiber_base::fiber_flags::moved);
+			}
 			fiber_base::coroswitch(front.get(), cur.get());
 			break;
 		}
@@ -928,6 +1153,11 @@ void f8_this_fiber::yield() noexcept
 			uni.erase(front);
 	}
 }
+void f8_this_fiber::schedule_main() noexcept
+{
+	fiber(GetVar(_main)).schedule();
+}
+
 void f8_this_fiber::resume_main() noexcept
 {
 	fiber(GetVar(_main)).resume();
@@ -950,16 +1180,22 @@ void f8_this_fiber::sleep_for(const std::chrono::duration<Rep, Period>& retime)
 	}
 }
 const char *f8_this_fiber::name(const char *what) noexcept { return GetVar(_curr)->name(what); }
+const char *f8_this_fiber::name() noexcept { return GetVar(_curr)->name(); }
 
 //-----------------------------------------------------------------------------------------
 int f8_fibers::size() noexcept { return ConstGetVar(_sched).size(); }
+int f8_fibers::size_detached() noexcept { return ConstGetVar(_det).size(); }
 bool f8_fibers::has_fibers() noexcept { return size(); }
 #if defined FIX8_FIBER_INSTRUMENTATION_
 void f8_fibers::print(std::ostream& os) noexcept
 {
-	os << "#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz   flags ord name\n";
-	int pos{};
+#if defined FIX8_FIBER_MULTITHREADING_
+	if (fiber::get_all_cvars().size() > 1)
+		os << "Thread id " << std::this_thread::get_id() << '\n';
+#endif
+	os << "#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz     flags ord name\n";
 	ConstGetVars();
+	int pos{};
 	os << std::left << std::setw(5) << std::dec << pos++ << *cur << std::endl;
 	for (const auto& pp : sch) // scheduled
 		os << std::left << std::setw(5) << std::dec << pos++ << *pp << std::endl;
@@ -986,8 +1222,38 @@ int f8_fibers::kill_all() noexcept
 	}
 	return killed;
 }
+#if defined FIX8_FIBER_MULTITHREADING_
+void f8_fibers::move(std::thread::id id, fiber_base_ptr ptr)
+{
+	fiber::get_all_cvars().queue_move(id, ptr);
+}
+void f8_fibers::move(std::thread::id id, const fiber& fb)
+{
+	move(id, fb._ctx);
+}
+#endif
+
 void f8_fibers::set_flag(global_fiber_flags flag) noexcept { GetVar(_gflags).set(static_cast<int>(flag)); }
 void f8_fibers::reset_flag(global_fiber_flags flag) noexcept { GetVar(_gflags).reset(static_cast<int>(flag)); }
+bool f8_fibers::terminating() noexcept { return ConstGetVar(_term); }
+
+//-----------------------------------------------------------------------------------------
+class jfiber : public fiber
+{
+public:
+	template<typename Fn, typename... Args, std::enable_if_t<!std::is_bind_expression_v<Fn>,int> = 0>
+	constexpr jfiber(Fn&& func, Args&&... args) : fiber({.join=true}, std::bind(std::forward<Fn>(func), std::forward<Args>(args)...)) {}
+
+	template<typename Fn, typename... Args, std::enable_if_t<!std::is_bind_expression_v<Fn>,int> = 0>
+	constexpr jfiber(fiber_params&& params, Fn&& func, Args&&... args)
+		: jfiber(std::move(params), std::bind(std::forward<Fn>(func), std::forward<Args>(args)...)) {}
+
+	template<typename Fn>
+	constexpr jfiber(Fn&& func) : fiber({.join=true}, std::forward<Fn>(func)) {}
+
+	template<typename Fn>
+	constexpr jfiber(fiber_params&& params, Fn&& func) : fiber(std::move(params), std::move(func)) { set_joinonexit(); }
+};
 
 //-----------------------------------------------------------------------------------------
 template<typename Fn, typename... Fns>
@@ -1015,9 +1281,14 @@ namespace this_fiber
 	inline fiber_id get_prev_id() noexcept { return f8_this_fiber::get_prev_id(); }
 #endif
 	inline fiber_id get_pid() noexcept { return f8_this_fiber::get_pid(); }
+#if defined FIX8_FIBER_MULTITHREADING_
+	inline void move(std::thread::id id) { f8_this_fiber::move(id); }
+#endif
 	inline void yield() noexcept { return f8_this_fiber::yield(); }
 	inline void resume_main() noexcept { return f8_this_fiber::resume_main(); }
-	inline const char *name(const char *what=nullptr) noexcept { return f8_this_fiber::name(what); }
+	inline void schedule_main() noexcept { return f8_this_fiber::schedule_main(); }
+	inline const char *name(const char *what) noexcept { return f8_this_fiber::name(what); }
+	inline const char *name() noexcept { return f8_this_fiber::name(); }
 
 	template<typename Clock, typename Duration>
 	inline void sleep_until(const std::chrono::time_point<Clock, Duration>& sltime)
@@ -1031,15 +1302,22 @@ namespace this_fiber
 namespace fibers
 {
 	inline int size() noexcept { return f8_fibers::size(); }
+	inline int size_detached() noexcept { return f8_fibers::size_detached(); }
 	inline bool has_fibers() noexcept { return f8_fibers::size() != 0; }
 	inline void set_flag(global_fiber_flags flag) noexcept { f8_fibers::set_flag(flag); }
 	inline void reset_flag(global_fiber_flags flag) noexcept { f8_fibers::reset_flag(flag); }
 #if defined FIX8_FIBER_INSTRUMENTATION_
 	inline void print(std::ostream& os=std::cout) noexcept { f8_fibers::print(os); }
 	inline const fiber::cvars& const_get_vars() noexcept { return fiber::const_get_vars(); }
+#if defined FIX8_FIBER_MULTITHREADING_
+	inline const fiber::all_cvars& const_get_all_cvars() noexcept { return fiber::const_get_all_cvars(); }
+	inline void move(std::thread::id id, fiber_base_ptr ptr) noexcept { f8_fibers::move(id, ptr); }
+	inline void move(std::thread::id id, const fiber& fb) noexcept { f8_fibers::move(id, fb); }
+#endif
 #endif
 	inline void sort() noexcept { f8_fibers::sort(); };
 	inline int kill_all() noexcept { return f8_fibers::kill_all(); }
+	inline bool terminating() noexcept { return f8_fibers::terminating(); }
 };
 
 } // namespace FIX8

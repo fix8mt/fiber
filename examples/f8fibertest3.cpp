@@ -10,24 +10,18 @@ using namespace FIX8;
 //-----------------------------------------------------------------------------------------
 int main(void)
 {
-	struct foo
+	std::packaged_task<int(int)> task(std::bind([](int arg)
 	{
-		int sub(int arg)
-		{
-			std::cout << "\tstarting " << arg << '\n';
-			for (int ii{}; ii < arg; this_fiber::yield())
-				std::cout << '\t' << arg << ": " << ++ii << '\n';
-			std::cout << "\tleaving " << arg << '\n';
-			return arg * 100;
-		}
-	} bar;
-
-	std::packaged_task<int(int)> task(std::bind(&foo::sub, &bar, std::placeholders::_1));
-	std::future<int> myfuture { task.get_future() };
-	fiber sub_co(std::move(task), 10);
-	for (int ii{}; sub_co; this_fiber::yield())
+		std::cout << "\tstarting sub\n";
+		for (int ii{}; ii < arg; this_fiber::yield())
+			std::cout << "\tsub: " << ++ii << '\n';
+		std::cout << "\tleaving sub\n";
+		return arg * 100;
+	}, std::placeholders::_1));
+	auto myfuture { task.get_future() };
+	fiber myfiber(std::move(task), 10);
+	for (int ii{}; myfiber; this_fiber::yield())
 		std::cout << "main: " << ++ii << '\n';
-	std::cout << "Exiting from main\n";
-	std::cout << "Future result = " << myfuture.get() << '\n';
+	std::cout << "Future result = " << myfuture.get() << "\nExiting from main\n";
 	return 0;
 }
