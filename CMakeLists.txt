@@ -33,7 +33,7 @@
 # ----------------------------------------------------------------------------------------
 cmake_minimum_required (VERSION 3.8)
 enable_language(CXX)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 project (f8fiber VERSION 2.0)
 
@@ -45,9 +45,11 @@ foreach(x ${esrc})
 	add_executable(${fn} ${x})
 endforeach()
 
+
 # to disable building monitor tests:
 # cmake -DBUILD_MONITOR=false ..
-if(NOT DEFINED BUILD_MONITOR OR BUILD_MONITOR)
+option(BUILD_MONITOR "enable building monitor tests" true)
+if(BUILD_MONITOR)
 	include(ExternalProject)
 	ExternalProject_Add(termbox2
 		GIT_REPOSITORY https://github.com/termbox/termbox2.git

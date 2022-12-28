@@ -39,7 +39,7 @@ class Reader : public fiber
 		std::cout << std::setw(3) << msg.size() << ' ' << msg << '\n';
 	}
 
-	// non-blocking re-entrant reader
+	// non-blocking resumable reader
 	void read_nb(int rdcnt)
 	{
 		int mread{};
