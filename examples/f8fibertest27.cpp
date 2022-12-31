@@ -35,7 +35,6 @@
 #include <string_view>
 #include <array>
 #include <list>
-#include <vector>
 #include <utility>
 #include <fix8/f8fiber.hpp>
 
