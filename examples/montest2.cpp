@@ -1,6 +1,6 @@
 //-----------------------------------------------------------------------------------------
 // fiber (header only)
-// Copyright (C) 2022 Fix8 Market Technologies Pty Ltd
+// Copyright (C) 2022-23 Fix8 Market Technologies Pty Ltd
 //   by David L. Dight
 // see https://github.com/fix8mt/f8fiber
 //
@@ -70,9 +70,9 @@ public:
 	void func(int arg)
 	{
 		std::unique_ptr<std::ofstream> ofstr { _todisk ? std::make_unique<std::ofstream>(
-			std::string { "worker"s + std::to_string(arg) + ".out" }.c_str(), std::ios::trunc) : nullptr };
+			std::string { "worker"s + std::to_string(arg - 10) + ".out" }.c_str(), std::ios::trunc) : nullptr };
 
-		for (int ii{}; ii < 10 + arg; ++ii)
+		while(arg--)
 		{
 			auto expv { _exp(_rnde) }; // obtain our exponent
 			std::ostringstream ostr;
@@ -95,7 +95,7 @@ int main(int argc, char *argv[])
 {
 	int interval{}, fcnt{20}, val;
 	long maxexp{4999999999L};
-	bool todisk{}, threaded{};
+	bool todisk{}, threaded{}, retain{true};
 
 	option long_options[]
 	{
@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
 		{},
 	};
 
-	static constexpr const char *optstr{"f:i:hm:w"};
+	static constexpr const char *optstr{"f:i:hm:wr"};
 	while ((val = getopt_long (argc, argv, optstr, long_options, 0)) != -1)
 	{
 		try
@@ -121,11 +121,13 @@ int main(int argc, char *argv[])
 				std::cout << "Usage: " << argv[0] << " [-" << optstr << "]" << R"(
   -w write results to disk files (default false)
   -i interval msecs (default 0)
+  -r retain finished fibers (default true)
   -f fiber count (default 20)
   -m max exponent (default 4999999999)
   -h help)" << std::endl;
 			  return 0;
 			case 'w': todisk = true; break;
+			case 'r': retain = false; break;
 			case 'm': maxexp = std::stol(optarg); break;
 			case 'f': fcnt = std::stoi(optarg); break;
 			case 'i': interval = std::stoi(optarg); break;
@@ -139,14 +141,16 @@ int main(int argc, char *argv[])
 			return 1;
 		}
 	}
+
 	if (todisk && maxexp == 4999999999L)
 		maxexp = 10000000L;
+	if (retain)
+		fibers::set_flag(global_fiber_flags::retain);
 
 	foo bar(interval, maxexp, todisk);
 	std::vector<std::unique_ptr<fiber>> fbs;
 	for (int ii{}; ii < fcnt; ++ii)
-		fbs.emplace_back(std::make_unique<fiber>(fiber_params{.launch_order=ii}, &foo::func, &bar, ii));
-	fibers::set_flag(global_fiber_flags::retain);
+		fbs.emplace_back(std::make_unique<fiber>(fiber_params{.launch_order=ii}, &foo::func, &bar, ii + 10));
 
 	while (fibers::has_fibers())
 	{

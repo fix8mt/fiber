@@ -1,6 +1,6 @@
 //-----------------------------------------------------------------------------------------
 // fiber (header only)
-// Copyright (C) 2022 Fix8 Market Technologies Pty Ltd
+// Copyright (C) 2022-23 Fix8 Market Technologies Pty Ltd
 //   by David L. Dight
 // see https://github.com/fix8mt/f8fiber
 //
@@ -58,11 +58,11 @@ class foo
 
 public:
 	foo(fiber_monitor& fm, int sleepval) : _fm(fm), _sleepval(sleepval),
-		_xyxy({{}, {_fm.get_dimensions().first, _fm.get_dimensions().second - 1}}) {}
+		_xyxy({{}, {_fm.get_dimensions().first, _fm.get_dimensions().second}}) {}
 
 	void func(int arg)
 	{
-		for (int ii{}; ii < arg; ++ii)
+		while (arg--)
 		{
 			_fm.update(_xyxy);
 			if (!_fm)
@@ -77,8 +77,8 @@ public:
 int main(int argc, char *argv[])
 {
 	int interval{100}, fcnt{-1}, sleepval{50};
-	bool lorder(true);
-	for (int opt; (opt = getopt(argc, argv, "f:i:s:oh")) != -1;)
+	bool lorder{true};
+	for (int opt; (opt = getopt(argc, argv, "f:i:s:orh")) != -1;)
 	{
 		try
 		{
@@ -89,6 +89,9 @@ int main(int argc, char *argv[])
 				break;
 			case 's':
 				sleepval = std::stoi(optarg);
+				break;
+			case 'r':
+				fibers::set_flag(global_fiber_flags::retain);
 				break;
 			case 'o':
 				lorder = false;
@@ -104,6 +107,7 @@ int main(int argc, char *argv[])
   -f fiber count (default screen limit)
   -s sleep msecs (default 50)
   -o no launch order
+  -r retain finished fibers
   -h help)" << std::endl;
 				exit(1);
 			default:
@@ -117,16 +121,17 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	fibers::set_flag(global_fiber_flags::skipmain);
 	fiber_monitor fm{std::chrono::milliseconds(interval)};
 	foo bar(fm, sleepval);
-	if (auto [x, y] { fm.get_dimensions() }; fcnt == -1)
-		fcnt = y - 4;
+	if (fcnt == -1)
+		fcnt = fm.get_dimensions().second - 4;
 	std::vector<std::unique_ptr<fiber>> fbs;
 	for (int ii{}; ii < fcnt; ++ii)
 		fbs.emplace_back(std::make_unique<fiber>(fiber_params{.launch_order=lorder ? ii : 99,.stacksz=8192},
 			&foo::func, &bar, 5 * (1 + (ii % 8))))->set_params("sub"s + std::to_string(ii));
 
-	for (int ii{}; fibers::has_fibers(); ++ii)
+	while (fibers::has_fibers())
 	{
 		if (!fm)
 		{

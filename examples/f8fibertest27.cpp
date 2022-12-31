@@ -33,64 +33,64 @@
 //-----------------------------------------------------------------------------------------
 #include <iostream>
 #include <string_view>
-#include <thread>
-#include <chrono>
+#include <array>
+#include <list>
+#include <vector>
+#include <utility>
 #include <fix8/f8fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
-using namespace std::literals;
 
 //-----------------------------------------------------------------------------------------
-class blah
-{
-	std::string_view tabs;
-public:
-	blah() = default;
-	blah(std::string_view tb) : tabs(std::move(tb)) {}
-	~blah() { std::cout << tabs << "~blah(): " << this_fiber::name() << '\n'; }
-};
+bool notfirst{};
 
-void doit_with_stoprequest(bool& stop_requested)
+//-----------------------------------------------------------------------------------------
+int main()
 {
-	blah b("\t");
-	bool waitagain{};
-	std::cout << '\t' << "Starting " << this_fiber::name() << '\n';
-	for(int ii{};; this_fiber::yield())
+	static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
+	{{
+		{	R"("I)",		"all",	"said",	"It’s",		"I’m",								},
+		{	"for",		"who",	"me.",	"them",		"myself.\"\n"						},
+		{	"am",			"of",		"no",		"because",	"doing",			"- Albert",		},
+		{	"thankful",	"those",	"to",		"of",			"it",				"Einstein\n"	},
+	}};
+
+	const auto func([](const auto& words)
 	{
-		std::cout << '\t' << this_fiber::name() << ": " << ++ii << '\n';
-		if (stop_requested)
+		for (auto pp : words)
 		{
-			if (waitagain)
-			{
-				std::cout << '\t' << this_fiber::name() << ": stop actioned\n";
-				break;
-			}
-			else
-			{
-				std::cout << '\t' << this_fiber::name() << ": stop requested\n";
-				waitagain = true;
-			}
+			if (std::exchange(notfirst, true))
+				std::cout << ' ';
+			std::cout << pp;
+			this_fiber::yield();
 		}
-	}
-	std::cout << '\t' << "Leaving " << this_fiber::name() << '\n';
-}
+	});
 
-//-----------------------------------------------------------------------------------------
-int main(void)
-{
-	std::cout << "Starting " << this_fiber::name() << '\n';
-	blah b;
-	bool stop_requested{};
-	fiber sub_co({.name="sub",.join=true}, &doit_with_stoprequest, std::ref(stop_requested));
-	for (int ii{}; ii < 5; this_fiber::yield())
-	{
-		std::cout << this_fiber::name() << ": " << ++ii << '\n';
-		std::this_thread::sleep_for(100ms);
-	}
-	stop_requested = true;
-	this_fiber::yield();
-	fibers::print();
-	std::cout << "Exiting " << this_fiber::name() << '\n';
+	std::list<fiber> sts;
+
+	launch_all_n
+	(
+	 	sts,
+		std::bind(func, wordset[0]),
+		std::bind(func, wordset[1]),
+		std::bind(func, wordset[2]),
+		std::bind(func, wordset[3])
+	);
+	fibers::wait();
+
+	notfirst = false;
+	sts.clear();
+	fibers::set_flag(global_fiber_flags::skipmain);
+
+	launch_all_with_params_n
+	(
+	 	sts,
+		fiber_params{.launch_order=0}, std::bind(func, wordset[0]),
+		fiber_params{.launch_order=3}, std::bind(func, wordset[1]),
+		fiber_params{.launch_order=1}, std::bind(func, wordset[2]),
+		fiber_params{.launch_order=2}, std::bind(func, wordset[3])
+	);
+
 	return 0;
 }

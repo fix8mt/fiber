@@ -1,6 +1,6 @@
 //-----------------------------------------------------------------------------------------
 // fiber (header only)
-// Copyright (C) 2022 Fix8 Market Technologies Pty Ltd
+// Copyright (C) 2022-23 Fix8 Market Technologies Pty Ltd
 //   by David L. Dight
 // see https://github.com/fix8mt/f8fiber
 //
@@ -64,8 +64,7 @@ class fiber_monitor
 {
 public:
 	enum class sort_mode { by_sched, by_id, by_ms, by_tms, by_name, by_flag, by_ctxsw, count };
-	static constexpr const std::array<const char *, static_cast<int>(sort_mode::count)>
-		_snames { "sched", "id", "time", "delta time", "name", "flag", "ctxswch" };
+	using enum sort_mode;
 
 private:
 	sort_mode _mode;
@@ -76,9 +75,11 @@ private:
 #if defined FIX8_FIBER_MULTITHREADING_
 	f8_spin_lock _pre_spl;
 #endif
+	static constexpr const std::array<const char *, static_cast<int>(count)>
+		_snames { "sched", "id", "time", "delta time", "name", "flag", "ctxswch" };
 
 public:
-	fiber_monitor(std::chrono::milliseconds timeout=std::chrono::milliseconds(1), sort_mode mode=sort_mode::by_id)
+	fiber_monitor(std::chrono::milliseconds timeout=std::chrono::milliseconds(1), sort_mode mode=by_id)
 		: _mode(mode), _timeout(timeout), _tp{std::chrono::steady_clock::now()}
 	{
 		tb_init();
@@ -130,7 +131,7 @@ public:
 				winpos = window_frame(_dimensions);
 			int y{winpos.upper().second}, pos{};
 			tb_printf(0, y++, TB_BOLD|TB_WHITE, TB_GREEN, banner);
-			if (_mode == sort_mode::by_sched)
+			if (_mode == by_sched)
 			{
 				update_row(y++, pos++, true, *vs->_curr);
 				for (const auto& pp : vs->_sched) // scheduled
@@ -142,7 +143,7 @@ public:
 						update_row(y++, --pos, false, *pp);
 				}
 			}
-			else if (_mode == sort_mode::by_id)
+			else if (_mode == by_id)
 				for (const auto& pp : vs->_uniq) // all fibers
 					update_row(y++, pos++, pp == vs->_curr, *pp);
 			else
@@ -155,15 +156,15 @@ public:
 					{
 						switch(_smode)
 						{
-						case sort_mode::by_ms:
+						case by_ms:
 							return lhs->_extime < rhs->_extime;
-						case sort_mode::by_tms:
+						case by_tms:
 							return lhs->_exdelta < rhs->_exdelta;
-						case sort_mode::by_name:
+						case by_name:
 							return std::strcmp(lhs->_params.name, rhs->_params.name) < 0;
-						case sort_mode::by_flag:
+						case by_flag:
 							return lhs->_flags.to_ulong() < rhs->_flags.to_ulong();
-						case sort_mode::by_ctxsw:
+						case by_ctxsw:
 							return lhs->_ctxswtchs < rhs->_ctxswtchs;
 						default:
 							break;
@@ -188,7 +189,7 @@ public:
 			switch (event.ch)
 			{
 			case TB_KEY_SPACE:
-				_mode = static_cast<sort_mode>((static_cast<int>(_mode) + 1) % static_cast<int>(sort_mode::count));
+				_mode = static_cast<sort_mode>((static_cast<int>(_mode) + 1) % static_cast<int>(count));
 				break;
 			case 'p':
 				_pause ^= true;
@@ -197,10 +198,13 @@ public:
 				_quit = true;
 				break;
 			default:
+				if (event.ch >= '1' && event.ch <= '7')
+					_mode = sort_mode(static_cast<int>(event.ch) - 0x31);
 				break;
 			}
 		}
-		tb_printf(0, tb_height() - 1, 0, TB_GREEN, "<space> change sort mode(%s), <p> pause, <x> exit", _snames[static_cast<int>(_mode)]);
+		const auto smi { static_cast<int>(_mode) };
+		tb_printf(0, tb_height() - 1, 0, TB_GREEN, "<space>,<1-7> sort mode(%d:%s), <p> pause, <x> exit", smi + 1, _snames[smi]);
 #if defined FIX8_FIBER_MULTITHREADING_
 		f8_scoped_spin_lock guard(_pre_spl);
 #endif

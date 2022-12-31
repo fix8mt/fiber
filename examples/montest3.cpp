@@ -1,6 +1,6 @@
 //-----------------------------------------------------------------------------------------
 // fiber (header only)
-// Copyright (C) 2022 Fix8 Market Technologies Pty Ltd
+// Copyright (C) 2022-23 Fix8 Market Technologies Pty Ltd
 //   by David L. Dight
 // see https://github.com/fix8mt/f8fiber
 //
@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
 {
 	int interval{100}, sleepval{50};
 	bool lorder(true);
-	static constexpr const char *optstr{"i:s:oh"};
+	static constexpr const char *optstr{"i:s:orh"};
 	for (int opt; (opt = getopt(argc, argv, optstr)) != -1;)
 	{
 		try
@@ -95,6 +95,9 @@ int main(int argc, char *argv[])
 			case 'o':
 				lorder = false;
 				break;
+			case 'r':
+				fibers::set_flag(global_fiber_flags::retain);
+				break;
 			case 'i':
 				interval = std::stoi(optarg);
 				break;
@@ -104,6 +107,7 @@ int main(int argc, char *argv[])
 			case 'h':
 				std::cout << "Usage: " << argv[0] << " [-" << optstr << "]" << R"(
   -i interval msecs (default 100)
+  -r retain finished fibers
   -s sleep msecs (default 50)
   -o no launch order
   -h help)" << std::endl;
