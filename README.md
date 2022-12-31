@@ -34,7 +34,7 @@ Currently only `Linux/x86_64` is supported. Other platforms to be supported in t
 - **x86_64 Linux only**
 - single _header-only_
 - stackful fibers; stacksize configurable for each fiber
-- supports any callable object (eg. function, class member, lambda) with optional arguments
+- supports any callable object (eg. function, class member, lambda expression) with optional arguments
 - heap based, memory-mapped or placement stacks; user definable stack can also be used
 - context switch implemented with inline assembly
 - fibers can be moved to other threads (can be configured out for performance)
@@ -60,7 +60,7 @@ In the following example each iteration of `main` and `func` simply yields, prin
 Note to pass a reference to the fiber we need to use the `std::ref` wrapper. Before exiting `func` calls the built-in printer.
 When `func` exits, control returns to `main` where testing `f0` for non-zero returns false indicating the fiber has finished.
 
-Note that you can name a fiber using `fiber_params`, and using named aggregate initialisation (here we use `.name`).
+Note that you can name a fiber using `fiber_params`, and using designated initialisers (here we use `.name`).
 
 <details><summary><i>source</i></summary>
 <p>
@@ -291,7 +291,7 @@ read, a process function is called.
 The fiber entry point `read_nb(int rdcnt)` will read `rdcnt` messages. Each message consists of a variable header (length 12 - 16 bytes);
 a variable body (length 80 - 102) and a fixed length trailer (length 10). Bytes are chosen randomly from a Base64 string.
 Each component of the message is read using the method `read_some()`
-which will randmonly choose to _not_ fully complete a read (50% of the time), randomly reading some count less than requested. Reading will continue, yielding to
+which will randomly choose to _not_ fully complete a read (50% of the time), randomly reading some count less than requested. Reading will continue, yielding to
 the caller when insufficient data is available.
 
 `read_some()` will also randomnly throw a `std::runtime_error`. `read_nb()` catches any exception and assigns it to a `std::exception_ptr`. If
@@ -448,8 +448,8 @@ $
 ## 4. Detached fiber workpiece
 In this example, four detached fibers are created in a new thread.
 
-When the thread ends, the detached fibers are run (at `join()`) in creation order.
-Each fiber takes a lambda function as its callable object, which prints from an array constructed with every fourth word until the array is exhausted.
+When the thread ends, the detached fibers are activated (at `join()`) in creation order.
+Each fiber takes a lambda expression as its callable object, which prints from an array constructed with every fourth word until the array is exhausted.
 
 Note the ctor for each fiber takes a reference to one of the `string_view` arrays, passed as an argument.
 
@@ -478,7 +478,7 @@ int main()
       {
          fiber ([](const auto& words)
          {
-            for (const auto& qq : words)
+            for (auto qq : words)
             {
                std::cout << qq << ' ';
                this_fiber::yield();
@@ -509,21 +509,19 @@ $
 </details>
 
 ## 5. Another detached fiber workpiece using `launch_all` and `launch_all_with_params`
-Similar to the previous example, four detached fibers are created in a new thread. Two versions of this are presented.
-To demonstrate the use of `launch_all` and `launch_all_with_params`,
-one example simply creates the fibers in the order they are defined; the second example creates the fibers with a specifed launch order (hence the need for
-'with params').
-
+Similar to the previous example, four detached fibers are created in a new thread. Two versions of this are shown.
 ```c++
-template<std::invocable Fn, typename... Fns>
-constexpr void launch_all(Fn&& func, Fns&& ...funcs);
+template<std::invocable... Fns>
+constexpr void launch_all(Fns&& ...funcs);
 
 template<typename Ps, std::invocable Fn, typename... Fns>
 constexpr void launch_all_with_params(Ps&& params, Fn&& func, Fns&& ...funcs);
 ```
+To demonstrate the use of `launch_all` and `launch_all_with_params`,
+one example simply creates the fibers in the order they are defined; the second example creates the fibers with a specifed launch order (hence the need for
+'with params').
 
 The `launch_all` and `launch_all_with_params` templates always detach the fibers they create.
-
 
 <details><summary><i>source</i></summary>
 <p>
@@ -548,7 +546,7 @@ int main()
 
    static const auto func([](const auto& words)
    {
-      for (const auto& pp : words)
+      for (auto pp : words)
       {
          if (static thread_local bool notfirst{}; std::exchange(notfirst, true))
             std::cout << ' ';
@@ -604,8 +602,8 @@ $
 </details>
 
 ## 6. Example with `std::packaged_task` and `std::future`
-Using `std::packaged_task` we create a task, binding a lambda function taking an int and returning an int. We then obtain a `std::future` from the task, and `std::move`
-the task to a fiber. The fiber will call the task execute operator.
+Using `std::packaged_task` we create a task, binding a lambda expression taking an int and returning an int. We then obtain a `std::future` from the task, and `std::move`
+the task to a `fiber`. The fiber will call the task execute operator.
 
 The fiber and main switch control between each other until the fiber has completed. When it completes, it returns a value which the task makes available to the future.
 This value is then obtained by the call to `myfuture.get()`.
@@ -1036,280 +1034,6 @@ main1 10
 main1 11
 140162099050176 Exiting from main1
 140162105964928 Exiting from main
-$
-```
-
-</p>
-</details>
-
-## 10. Creating fibers using different callable objects
-This example creates 6 fibers:
-| **Var** | **Type** | **Description** | **Parameters** |
---|--|--|--
-| sub_co | function | Creates fiber with stacksz=2048 calling function `void doit(int arg)` | 3 |
-| sub_co1 | member function | Creates fiber with stacksz=16384 calling `void foo::sub2()` | sub2 calls `doit(4)` |
-| sub_co2 | member function | Creates fiber with stacksz=32768 calling `void foo::sub(int arg)` | 5 |
-| sub_co3 | member function | Creates fiber with stacksz=8192 calling `void foo::sub1(int arg, const char *str)` | 8.0, "hello"|
-| sub_co4 | member function | Creates fiber calling `void foo::sub3(int arg, const char *str)` | 12, "there"|
-| sub_lam | lambda | Creates fiber named "sub lambda" with mapped stack with default stacksz calling supplied lambda | 15 |
-
-Once the fibers have been created, the main loop begins. Each iteration simply yields, allowing one of the fibers to execute. The `has_fibers` function
-returns true if any runnable fibers are available. Note that the first iteration performs some specific action - calling print then switching to `sub_co3`. When control
-finally returns to main another print is performed. Examining the two print outputs reveals the changes that have occured in the fiber manager. Also
-note that since `sub_co3` is the first fiber to actually execute, you can see the string `hello` printed followed by `sub8` (which is the number of
-iterations that `sub_co3` will perform).
-
-Notice each fiber uses `this_fiber::name` to name itself with exception of `sub_lam` which uses `fiber_params` to name itself.
-
-Each of the fibers prints a start message and loops for a different number of times, printing each iteration each time and
-finally printing a leaving message before finishing. Main similarly prints each iteration.
-
-In fiber `sub_co4`, the fiber is suspended for 100ms each loop. This means that other fibers will get a larger share of the available cpu.
-Eventually only this fiber is left running as can be seen by the sub12 messages.
-
-The sizes of various objects are printed at the end.
-
-<details><summary><i>source</i></summary>
-<p>
-
-```c++
-#include <iostream>
-#include <functional>
-#include <fix8/f8fiber.hpp>
-using namespace FIX8;
-using namespace std::literals;
-
-void doit(int arg)
-{
-   std::cout << this_fiber::name(("sub"s + std::to_string(arg)).c_str());
-   std::cout << "\tstarting " << arg << '\n';
-   for (int ii{}; ii < arg; )
-   {
-      std::cout << '\t' << this_fiber::name() << ' ' << arg << ": " << ++ii << '\n';
-      this_fiber::yield();
-   }
-   std::cout << "\tleaving " << arg << '\n';
-   fibers::print();
-}
-
-struct foo
-{
-   void sub(int arg)
-   {
-      doit(arg);
-   }
-   void sub1(int arg, const char *str)
-   {
-      std::cout << str << '\n';
-      doit(arg);
-   }
-   void sub3(int arg, const char *str)
-   {
-      auto st { "sub"s + std::to_string(arg) };
-      this_fiber::name(st.c_str());
-      std::cout << "\tsub2 starting " << arg << '\n';
-      for (int ii{}; ii < arg; )
-      {
-         std::cout << '\t' << this_fiber::name() << ' ' << arg << ": " << ++ii << '\n';
-         //this_fiber::sleep_until(std::chrono::steady_clock::now() + 500ms);
-         this_fiber::sleep_for(100ms);
-      }
-      std::cout << "\tsub2 leaving " << arg << '\n';
-   }
-   void sub2()
-   {
-      doit(4);
-   }
-};
-int main(void)
-{
-   foo bar;
-   fiber sub_co({.stacksz=2048}, &doit, 3),
-         sub_co1({.stacksz=16384}, &foo::sub2, &bar),
-         sub_co2({.stacksz=32768}, &foo::sub, &bar, 5),
-         sub_co3({.stacksz=8192}, &foo::sub1, &bar, 8., "hello"),
-         sub_co4(std::bind(&foo::sub3, &bar, 12, "there"));
-   fiber sub_lam({.name="sub lambda",.stack=std::make_unique<f8_fixedsize_mapped_stack>()}, [](int arg)
-   //char stack[4096];
-   //fiber sub_lam({.name="sub lambda",.stacksz=sizeof(stack),.stack=std::make_unique<f8_fixedsize_placement_stack>(stack)}, [](int arg)
-   {
-      std::cout << "\tlambda starting " << arg << '\n';
-      for (int ii{}; ii < arg; )
-      {
-         std::cout << '\t' << this_fiber::name() << ' ' << arg << ": " << ++ii << '\n';
-         this_fiber::yield();
-      }
-      std::cout << "\tlambda leaving " << arg << '\n';
-   }, 15);
-   for (int ii{}; fibers::has_fibers(); ++ii)
-   {
-      if (ii == 0)
-      {
-         fibers::print(std::cout);
-         sub_co3.resume();
-         fibers::print(std::cout);
-      }
-      this_fiber::yield();
-      std::cout << "main: " << std::dec << ii << '\n';
-   }
-   std::cout << "Exiting from main\nSizes\n";
-   std::cout << "fiber: " << sizeof(fiber) << '\n';
-   std::cout << "fiber::cvars: " << sizeof(fiber::cvars) << '\n';
-   std::cout << "fiber::all_cvars: " << sizeof(fiber::all_cvars) << '\n';
-   std::cout << "fiber_id: " << sizeof(fiber_id) << '\n';
-   std::cout << "fiber_base: " << sizeof(fiber_base) << '\n';
-   std::cout <<"fiber_params: " << sizeof(fiber_params) << '\n';
-   return 0;
-}
-```
-
-</p>
-</details>
-
-<details><summary><i>output</i></summary>
-<p>
-
-```
-$ ./f8fibertest
-#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz     flags ord name
-0    * NaF  NaF  NaF       1              0              0       0  8388608 m________  99 main
-1      9072 NaF  NaF       0 0x563f8b3a9690 0x563f8b3a8ee0      72     2048 _____n___  99
-2      2352 NaF  NaF       0 0x563f8b3adb60 0x563f8b3a9bb0      72    16384 _____n___  99
-3      8864 NaF  NaF       0 0x563f8b3b5be0 0x563f8b3adc30      72    32768 _____n___  99
-4      1728 NaF  NaF       0 0x563f8b3b7c40 0x563f8b3b5c90      72     8192 _____n___  99
-5      2976 NaF  NaF       0 0x7f905fc76fc0 0x7f905fc57010      72   131072 _____n___  99
-6      1728 NaF  NaF       0 0x7f905f913fb0 0x7f905f8f4000      72   131072 _____n___  99 sub lambda
-hello
-sub8    starting 8
-        sub8 8: 1
-sub4    starting 4
-        sub4 4: 1
-sub5    starting 5
-        sub5 5: 1
-sub3    starting 3
-        sub3 3: 1
-        sub2 starting 12
-        sub12 12: 1
-        lambda starting 15
-        sub lambda 15: 1
-#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz     flags ord name
-0    * NaF  NaF  1728      2 0x7ffebd5d1368              0       0  8388608 m________  99 main
-1      1728 NaF  NaF       1 0x563f8b3b7a68 0x563f8b3b5c90     544     8192 _________  99 sub8
-2      2352 NaF  1728      1 0x563f8b3ad998 0x563f8b3a9bb0     528    16384 _________  99 sub4
-3      8864 NaF  2352      1 0x563f8b3b5a08 0x563f8b3adc30     544    32768 _________  99 sub5
-4      9072 NaF  8864      1 0x563f8b3a94b8 0x563f8b3a8ee0     544     2048 _________  99 sub3
-5      2976 NaF  9072      1 0x7f905fc76dd8 0x7f905fc57010     560   131072 __s______  99 sub12
-6      1728 NaF  2976      1 0x7f905f913e68 0x7f905f8f4000     400   131072 _________  99 sub lambda
-        sub8 8: 2
-        sub4 4: 2
-        sub5 5: 2
-        sub3 3: 2
-        sub lambda 15: 2
-main: 0
-        sub8 8: 3
-        sub4 4: 3
-        sub5 5: 3
-        sub3 3: 3
-        sub lambda 15: 3
-main: 1
-        sub8 8: 4
-        sub4 4: 4
-        sub5 5: 4
-        leaving 3
-#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz     flags ord name
-0    * 9072 NaF  8864      4 0x563f8b3a94b8 0x563f8b3a8ee0     544     2048 _________  99 sub3
-1      1728 NaF  9072      3 0x7f905f913e68 0x7f905f8f4000     400   131072 _________  99 sub lambda
-2      NaF  NaF  1728      4 0x7ffebd5d1368              0       0  8388608 m________  99 main
-3      1728 NaF  NaF       4 0x563f8b3b7a68 0x563f8b3b5c90     544     8192 _________  99 sub8
-4      2976 NaF  9072      1 0x7f905fc76dd8 0x7f905fc57010     560   131072 __s______  99 sub12
-5      2352 NaF  1728      4 0x563f8b3ad998 0x563f8b3a9bb0     528    16384 _________  99 sub4
-6      8864 NaF  2352      4 0x563f8b3b5a08 0x563f8b3adc30     544    32768 _________  99 sub5
-        sub lambda 15: 4
-main: 2
-        sub8 8: 5
-        leaving 4
-#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz     flags ord name
-0    * 2352 NaF  1728      5 0x563f8b3ad998 0x563f8b3a9bb0     528    16384 _________  99 sub4
-1      8864 NaF  2352      4 0x563f8b3b5a08 0x563f8b3adc30     544    32768 _________  99 sub5
-2      9072 NaF  8864      4 0x563f8b3a9588 0x563f8b3a8ee0     336     2048 _f_______  99 sub3
-3      1728 NaF  9072      4 0x7f905f913e68 0x7f905f8f4000     400   131072 _________  99 sub lambda
-4      NaF  NaF  1728      5 0x7ffebd5d1368              0       0  8388608 m________  99 main
-5      2976 NaF  9072      1 0x7f905fc76dd8 0x7f905fc57010     560   131072 __s______  99 sub12
-6      1728 NaF  NaF       5 0x563f8b3b7a68 0x563f8b3b5c90     544     8192 _________  99 sub8
-        sub5 5: 5
-        sub lambda 15: 5
-main: 3
-        sub8 8: 6
-        leaving 5
-#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz     flags ord name
-0    * 8864 NaF  1728      6 0x563f8b3b5a08 0x563f8b3adc30     544    32768 _________  99 sub5
-1      1728 NaF  8864      5 0x7f905f913e68 0x7f905f8f4000     400   131072 _________  99 sub lambda
-2      2976 NaF  9072      1 0x7f905fc76dd8 0x7f905fc57010     560   131072 __s______  99 sub12
-3      NaF  NaF  1728      6 0x7ffebd5d1368              0       0  8388608 m________  99 main
-4      1728 NaF  NaF       6 0x563f8b3b7a68 0x563f8b3b5c90     544     8192 _________  99 sub8
-        sub lambda 15: 6
-main: 4
-        sub8 8: 7
-        sub lambda 15: 7
-main: 5
-        sub8 8: 8
-        sub lambda 15: 8
-main: 6
-        leaving 8
-#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz     flags ord name
-0    * 1728 NaF  NaF       9 0x563f8b3b7a68 0x563f8b3b5c90     544     8192 _________  99 sub8
-1      2976 NaF  9072      1 0x7f905fc76dd8 0x7f905fc57010     560   131072 __s______  99 sub12
-2      1728 NaF  1728      8 0x7f905f913e68 0x7f905f8f4000     400   131072 _________  99 sub lambda
-3      NaF  NaF  1728      9 0x7ffebd5d1368              0       0  8388608 m________  99 main
-        sub lambda 15: 9
-main: 7
-        sub lambda 15: 10
-main: 8
-        sub lambda 15: 11
-main: 9
-        sub lambda 15: 12
-main: 10
-        sub lambda 15: 13
-main: 11
-        sub lambda 15: 14
-main: 12
-        sub lambda 15: 15
-main: 13
-        lambda leaving 15
-main: 14
-        sub12 12: 2
-main: 15
-        sub12 12: 3
-main: 16
-        sub12 12: 4
-main: 17
-        sub12 12: 5
-main: 18
-        sub12 12: 6
-main: 19
-        sub12 12: 7
-main: 20
-        sub12 12: 8
-main: 21
-        sub12 12: 9
-main: 22
-        sub12 12: 10
-main: 23
-        sub12 12: 11
-main: 24
-        sub12 12: 12
-main: 25
-        sub2 leaving 12
-main: 26
-main: 27
-Exiting from main
-Sizes
-fiber: 16
-fiber::cvars: 248
-fiber::all_cvars: 120
-fiber_id: 8
-fiber_base: 224
-fiber_params: 48
 $
 ```
 
