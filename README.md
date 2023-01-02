@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://www.fix8mt.com"><img src="https://github.com/fix8mt/f8fiber/blob/main/assets/fix8mt_Master_Logo_Green_Trans.png" width="200"></a>
+  <a href="https://www.fix8mt.com"><img src="https://github.com/fix8mt/fiber/blob/main/assets/fix8mt_Master_Logo_Green_Trans.png" width="200"></a>
 </p>
 
 # f8fiber
@@ -17,17 +17,17 @@ Currently only `Linux/x86_64` is supported. Other platforms to be supported in t
 
 **This documentation currently refers to the _dev_ branch. To be released to _main_ soon.**
 
-| ![montest2 - example monitor application](https://github.com/fix8mt/f8fiber/blob/dev/assets/fibermonitor1.png) |
+| ![montest2 - example monitor application](https://github.com/fix8mt/fiber/blob/main/assets/fibermonitor1.png) |
 |:--:|
 | Screenshot from *`montest2`* with 20 fibers working in one thread|
 
-- [wiki]( https://github.com/fix8mt/f8fiber/wiki) for complete documentation.
-- [API](https://github.com/fix8mt/f8fiber/wiki/API) for API documentation.
-- [Building](https://github.com/fix8mt/f8fiber/wiki/Building) for build options and settings
-- [Monitor](https://github.com/fix8mt/f8fiber/wiki/Monitor) for built-in monitor documentation.
-- [here](https://github.com/fix8mt/f8fiber/blob/main/include/fix8/f8fiber.hpp) for implementation.
+- [wiki]( https://github.com/fix8mt/fiber/wiki) for complete documentation.
+- [API](https://github.com/fix8mt/fiber/wiki/API) for API documentation.
+- [Building](https://github.com/fix8mt/fiber/wiki/Building) for build options and settings
+- [Monitor](https://github.com/fix8mt/fiber/wiki/Monitor) for built-in monitor documentation.
+- [here](https://github.com/fix8mt/fiber/blob/main/include/fix8/f8fiber.hpp) for implementation.
 
-- [here](https://github.com/fix8mt/f8fiber/tree/f8_fiber_boost) for the original `f8fiber` implementation.
+- [here](https://github.com/fix8mt/fiber/tree/f8_fiber_boost) for the original `f8fiber` implementation.
 
 ## Features
 
@@ -50,8 +50,8 @@ Currently only `Linux/x86_64` is supported. Other platforms to be supported in t
 - fast, very lightweight
 - fiber exceptions and handling
 - built-in instrumentation (can be configured out for performance)
-- lots of [examples](https://github.com/fix8mt/f8fiber/tree/main/examples)
-- full [API](https://github.com/fix8mt/f8fiber/wiki/API) documentation
+- lots of [examples](https://github.com/fix8mt/fiber/tree/main/examples)
+- full [API](https://github.com/fix8mt/fiber/wiki/API) documentation
 - supports `jfiber` (similar to `std::jthread`)
 
 # Examples
