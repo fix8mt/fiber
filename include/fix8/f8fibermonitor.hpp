@@ -35,11 +35,14 @@
 #define FIX8_FIBERMONITOR_HPP_
 
 //----------------------------------------------------------------------------------------
+#include <cctype>
 #include <termbox.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
 
 //-----------------------------------------------------------------------------------------
 #if defined FIBER_NO_INSTRUMENTATION || !defined FIX8_FIBER_INSTRUMENTATION_
-#error "fiber_monitor requires FIBER_NO_INSTRUMENTATION to be undefined"
+#error "fiber_monitor can't be built with FIBER_NO_INSTRUMENTATION defined"
 #endif
 
 //-----------------------------------------------------------------------------------------
@@ -63,8 +66,14 @@ struct window_frame : window_coord
 class fiber_monitor
 {
 public:
-	enum class sort_mode { by_sched, by_id, by_ms, by_tms, by_name, by_flag, by_ctxsw, count };
+	enum class sort_mode { by_sched, by_id, by_ms, by_tms, by_name, by_flag, by_ctxsw, by_depth, by_launchorder, count };
 	using enum sort_mode;
+
+	static xy_coord get_terminal_dimensions()
+	{
+		struct winsize w;
+		return ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == 0 ? xy_coord{ w.ws_col, w.ws_row } : xy_coord{};
+	}
 
 private:
 	sort_mode _mode;
@@ -76,7 +85,7 @@ private:
 	f8_spin_lock _pre_spl;
 #endif
 	static constexpr const std::array<const char *, static_cast<int>(count)>
-		_snames { "sched", "id", "time", "delta time", "name", "flag", "ctxswch" };
+		_snames { "sched", "id", "time", "delta time", "name", "flags", "ctxswtch", "depth", "launch order"  };
 
 public:
 	fiber_monitor(std::chrono::milliseconds timeout=std::chrono::milliseconds(1), sort_mode mode=by_id)
@@ -100,7 +109,7 @@ public:
 	void update_row(int row, int pos, bool iscurrent, const fiber_base& what) const
 	{
 		tb_printf(0, row, 0, iscurrent ? TB_BOLD|TB_RED : 0,
-			"%-4u %c %-4s %-4s %-4s %6u %6u %4u %#14lx %#14lx %6u %8u %7s %3u %15s",
+			"%-4u %c %-4s %-4s %-4s %6u %6u %4u %#14lx %#14lx %8u %8u %7s %3u %15s",
 			pos, iscurrent ? '*' : ' ', what.get_id().to_string().c_str(), what.get_pid().to_string().c_str(),
 			what.get_prev_id().to_string().c_str(), what._ctxswtchs,
 			std::chrono::duration_cast<std::chrono::milliseconds>(what._extime).count(),
@@ -121,7 +130,7 @@ public:
 		}
 
 		static constexpr const char *banner {
-			"#      fid  pfid prev  ctxsw  t(ms)   ^t      stack ptr    stack alloc  depth  stacksz     flags ord            name"};
+			"#      fid  pfid prev  ctxsw  t(ms)   ^t      stack ptr    stack alloc    depth  stacksz     flags ord            name"};
 
 		if (!_pause)
 		{
@@ -166,6 +175,14 @@ public:
 							return lhs->_flags.to_ulong() < rhs->_flags.to_ulong();
 						case by_ctxsw:
 							return lhs->_ctxswtchs < rhs->_ctxswtchs;
+						case by_launchorder:
+							return lhs->_params.launch_order < rhs->_params.launch_order;
+						case by_depth:
+							return lhs->_stk_alloc ?
+								(reinterpret_cast<unsigned long>(lhs->_stk_alloc + lhs->_stacksz
+								 / sizeof(uintptr_t) - 1) - reinterpret_cast<unsigned long>(lhs->_stk)) <
+								(reinterpret_cast<unsigned long>(rhs->_stk_alloc + rhs->_stacksz
+								 / sizeof(uintptr_t) - 1) - reinterpret_cast<unsigned long>(rhs->_stk)) : true;
 						default:
 							break;
 						}
@@ -197,14 +214,16 @@ public:
 			case 'x':
 				_quit = true;
 				break;
+			case '0':
+				break;
 			default:
-				if (event.ch >= '1' && event.ch <= '7')
+				if (std::isdigit(event.ch)) //1 - 9
 					_mode = sort_mode(static_cast<int>(event.ch) - 0x31);
 				break;
 			}
 		}
 		const auto smi { static_cast<int>(_mode) };
-		tb_printf(0, tb_height() - 1, 0, TB_GREEN, "<space>,<1-7> sort mode(%d:%s), <p> pause, <x> exit", smi + 1, _snames[smi]);
+		tb_printf(0, tb_height() - 1, 0, TB_GREEN, "<space>,<1-9> sort mode(%d:%s), <p> pause, <x> exit", smi + 1, _snames[smi]);
 #if defined FIX8_FIBER_MULTITHREADING_
 		f8_scoped_spin_lock guard(_pre_spl);
 #endif

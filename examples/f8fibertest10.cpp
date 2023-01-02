@@ -46,10 +46,10 @@ int main()
 	{
 		static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
 		{{
-			{	R"("I)",		"all",	"said",	"It’s",		"I’m",		"\n –",		},
-			{	"am",			"of",		"no",		"because",	"doing",		"Albert",	},
-			{	"thankful",	"those",	"to",		"of",			"it",			"Einstein"	},
-			{	"for",		"who",	"me.",	"them",		R"(myself.")",				},
+			{	R"("I )",		"all ",		"said ",	"It’s ",		"I’m ",			"\n – ",			},
+			{	"am ",			"of ",		"no ",	"because ",	"doing ",		"Albert ",		},
+			{	"thankful ",	"those ",	"to ",	"of ",		"it ",			"Einstein\n"	},
+			{	"for ",			"who ",		"me. ",	"them ",		R"(myself.")",						},
 		}};
 		for (const auto& pp : wordset)
 		{
@@ -57,13 +57,12 @@ int main()
 			{
 				for (auto qq : words)
 				{
-					std::cout << qq << ' ';
+					std::cout << qq;
 					this_fiber::yield();
 				}
 			}, pp).detach();
 		}
 	}).join();
 
-	std::cout << std::endl;
 	return 0;
 }

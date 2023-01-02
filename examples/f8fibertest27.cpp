@@ -42,25 +42,20 @@
 using namespace FIX8;
 
 //-----------------------------------------------------------------------------------------
-bool notfirst{};
-
-//-----------------------------------------------------------------------------------------
 int main()
 {
 	static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
 	{{
-		{	R"("I)",		"all",	"said",	"It’s",		"I’m",								},
-		{	"for",		"who",	"me.",	"them",		"myself.\"\n"						},
-		{	"am",			"of",		"no",		"because",	"doing",			"- Albert",		},
-		{	"thankful",	"those",	"to",		"of",			"it",				"Einstein\n"	},
+		{	R"("I )",		"all ",		"said ",		"It’s ",		"I’m ",								},
+		{	"for ",			"who ",		"me. ",		"them ",		"myself.\"\n"						},
+		{	"am ",			"of ",		"no ",		"because ",	"doing ",		" - Albert ",	},
+		{	"thankful ",	"those ",	"to ",		"of ",		"it ",			"Einstein\n"	},
 	}};
 
 	const auto func([](const auto& words)
 	{
 		for (auto pp : words)
 		{
-			if (std::exchange(notfirst, true))
-				std::cout << ' ';
 			std::cout << pp;
 			this_fiber::yield();
 		}
@@ -76,9 +71,8 @@ int main()
 		std::bind(func, wordset[2]),
 		std::bind(func, wordset[3])
 	);
-	fibers::wait();
+	fibers::wait_all();
 
-	notfirst = false;
 	sts.clear();
 	fibers::set_flag(global_fiber_flags::skipmain);
 

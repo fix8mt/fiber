@@ -31,7 +31,7 @@
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
-#include <iostream>
+#include <cstdio>
 #include <thread>
 #include <fix8/f8fiber.hpp>
 
@@ -49,7 +49,7 @@ int main()
 	{
 		do
 		{
-			std::cout << 'a';
+			std::printf("%c", 'a');
 			this_fiber::yield();
 		}
 		while (++ii < 20);
@@ -59,17 +59,32 @@ int main()
 	{
 		do
 		{
-			std::cout << 'b';
-			std::thread([]() { std::cout << 'B'; }).detach();
+			std::printf("%c", 'b');
+			std::thread([]() { std::printf("%c", 'B'); }).detach();
 			this_fiber::yield();
 		}
 		while (++ii < 20);
 	}).detach();
 
-	std::cout << 'X';
+	std::printf("%c", 'X');
 	return 0;
 }
 
-// XababBabBabBababBBabBabBabBabBB
-// XababBabBabBabBabBabBabaBbBabBB
-// XababBabBabBabBabBabBabBabBabBB
+// XabababBabBBabBababBabBabBBabBaB
+// XabababBabBBabBabBabBababBabBaBB
+// XabababBabBBabBabBababBababBBBaB
+// XabababBabBababBBBababBBabBabBaB
+// XabababBabBBabBababBabBabBabBBaB
+// XabababBabBBabBababBabBabBabBaBB
+// XabababBabBBababBabBabBBababBaBB
+// XabababBabBabBBabababBBBabBabaBB
+// XabababBBabBabababBBabBBababBaBB
+// XabababBabBabBabBBababBabBabBBaB
+// XabababBBababBabBabBabBBabBabaBB
+// XabababBabBabBBababababBBBabBBaB
+// XabababBabBBabBababBabBabBBabaBB
+// XabababBabBBabBababBabBabBBabBaB
+// XabababBabBBababBBababBBababBaBB
+// XababBabBababBababBBBabBababBaBB
+// XabababBabBBabBababBabBabBBabBaB
+// XabababBabBBababBabBabBBababBaBB
