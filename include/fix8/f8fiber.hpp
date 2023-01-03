@@ -382,7 +382,7 @@ class alignas(16) fiber_base
 
 	static size_t get_default_stacksz()
 	{
-		static thread_local auto sz([]()
+		static thread_local const auto sz([]()
 		{
 			size_t size{};
 			if (pthread_attr_t attr; pthread_attr_init(&attr) == 0)

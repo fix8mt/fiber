@@ -2,7 +2,7 @@
   <a href="https://www.fix8mt.com"><img src="https://github.com/fix8mt/fiber/blob/main/assets/fix8mt_Master_Logo_Green_Trans.png" width="200"></a>
 </p>
 
-# f8fiber
+# fiber
 ### A novel C++20 fiber implementation with similar interface to `std::thread`, header-only / x86_64 / Linux only / stackful / built-in scheduler / thread shareable
 
 ------------------------------------------------------------------------
