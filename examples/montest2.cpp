@@ -2,7 +2,7 @@
 // fiber (header only)
 // Copyright (C) 2022-23 Fix8 Market Technologies Pty Ltd
 //   by David L. Dight
-// see https://github.com/fix8mt/f8fiber
+// see https://github.com/fix8mt/fiber
 //
 // Lightweight header-only stackful per-thread fiber
 //		with built-in roundrobin scheduler x86_64 / linux only
@@ -148,18 +148,18 @@ int main(int argc, char *argv[])
 		fibers::set_flag(global_fiber_flags::retain);
 
 	foo bar(interval, maxexp, todisk);
-	std::vector<std::unique_ptr<fiber>> fbs;
+	std::vector<fiber_ptr> fbs;
 	for (int ii{}; ii < fcnt; ++ii)
-		fbs.emplace_back(std::make_unique<fiber>(fiber_params{.launch_order=ii}, &foo::func, &bar, ii + 10));
+		fbs.emplace_back(make_fiber({.launch_order=ii}, &foo::func, &bar, ii + 10));
 
 	while (fibers::has_fibers())
 	{
+		this_fiber::yield();
 		if (!bar)
 		{
 			fibers::kill_all();
 			break;
 		}
-		this_fiber::yield();
 	}
 	bar.update();
 	std::this_thread::sleep_for(3s);

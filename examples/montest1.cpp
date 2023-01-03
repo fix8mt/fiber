@@ -2,7 +2,7 @@
 // fiber (header only)
 // Copyright (C) 2022-23 Fix8 Market Technologies Pty Ltd
 //   by David L. Dight
-// see https://github.com/fix8mt/f8fiber
+// see https://github.com/fix8mt/fiber
 //
 // Lightweight header-only stackful per-thread fiber
 //		with built-in roundrobin scheduler x86_64 / linux only
@@ -160,10 +160,10 @@ int main(int argc, char *argv[])
 	foo bar(fm, sleepval);
 	if (fcnt == -1)
 		fcnt = fm.get_dimensions().second - 4;
-	std::vector<std::unique_ptr<fiber>> fbs;
+	std::vector<fiber_ptr> fbs;
 	for (int ii{}; ii < fcnt; ++ii)
 	{
-		fbs.emplace_back(std::make_unique<fiber>(fiber_params{.launch_order=lorder ? ii : 99,.stacksz=(fcnt * 4096lu) & ~0xff},
+		fbs.emplace_back(make_fiber({.launch_order=lorder ? ii : 99,.stacksz=(fcnt * 4096lu) & ~0xff},
 			&foo::func, &bar, 2 * (ii + 1)))->set_params("sub"s + std::to_string(ii));
 	}
 

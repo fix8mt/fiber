@@ -2,7 +2,7 @@
 # fiber (header only)
 # Copyright (C) 2022-23 Fix8 Market Technologies Pty Ltd
 #   by David L. Dight
-# see https://github.com/fix8mt/f8fiber
+# see https://github.com/fix8mt/fiber
 #
 # Lightweight header-only stackful per-thread fiber
 #		with built-in roundrobin scheduler x86_64 / linux only

@@ -15,8 +15,6 @@ implementation allows you to move fibers between threads. This can be used to sh
 
 Currently only `Linux/x86_64` is supported. Other platforms to be supported in the future.
 
-**This documentation currently refers to the _dev_ branch. To be released to _main_ soon.**
-
 | ![montest2 - example monitor application](https://github.com/fix8mt/fiber/blob/main/assets/fibermonitor1.png) |
 |:--:|
 | Screenshot from *`montest2`* with 20 fibers working in one thread and using `fiber_monitor`|

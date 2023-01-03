@@ -2,7 +2,7 @@
 // fiber (header only)
 // Copyright (C) 2022-23 Fix8 Market Technologies Pty Ltd
 //   by David L. Dight
-// see https://github.com/fix8mt/f8fiber
+// see https://github.com/fix8mt/fiber
 //
 // Lightweight header-only stackful per-thread fiber
 //		with built-in roundrobin scheduler x86_64 / linux only
@@ -130,12 +130,12 @@ int main(int argc, char *argv[])
 		foo bar(fm, sleepval, first);
 		int fcnt { fm.get_dimensions().second / 2 - 6 };
 		//int fcnt { fm.get_dimensions().second / 2 - 3 };
-		std::vector<std::unique_ptr<fiber>> fbs;
+		std::vector<fiber_ptr> fbs;
 		for (int ii{}; ii < fcnt; ++ii)
 		{
 			std::ostringstream ostr;
 			ostr << (first ? 'A' : 'B') << std::setfill('0') << std::setw(2) << ii;
-			fbs.emplace_back(std::make_unique<fiber>(fiber_params{.launch_order=lorder ? ii : 99,.stacksz=8192},
+			fbs.emplace_back(make_fiber({.launch_order=lorder ? ii : 99,.stacksz=8192},
 				&foo::func, &bar, 5 * (1 + (ii % 8))))->set_params(ostr.str());
 		}
 		std::mt19937_64 rnde {std::random_device{}()};

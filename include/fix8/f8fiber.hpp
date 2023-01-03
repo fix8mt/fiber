@@ -2,7 +2,7 @@
 // fiber (header only)
 // Copyright (C) 2022-23 Fix8 Market Technologies Pty Ltd
 //   by David L. Dight
-// see https://github.com/fix8mt/f8fiber
+// see https://github.com/fix8mt/fiber
 //
 // Lightweight header-only stackful per-thread fiber
 //		with built-in roundrobin scheduler x86_64 / linux only
@@ -185,6 +185,7 @@ struct f8_this_fiber
 using fiber_base_ptr = std::shared_ptr<class fiber_base>;
 using fiber_queue = std::deque<fiber_base_ptr>;
 using fiber_set = std::unordered_set<fiber_base_ptr>;
+using fiber_ptr = std::unique_ptr<class fiber>;
 
 // used by FIX8::fibers
 struct f8_fibers
@@ -691,7 +692,7 @@ public:
 	template<typename Fn, typename... Args>
 	requires std::invocable<Fn&&, Args...> && (!std::is_bind_expression_v<Fn>)
 	constexpr fiber(fiber_params&& params, Fn&& func, Args&&... args)
-		: fiber(std::move(params), std::bind(std::forward<Fn>(func), std::forward<Args>(args)...)) {}
+		: fiber(std::forward<fiber_params>(params), std::bind(std::forward<Fn>(func), std::forward<Args>(args)...)) {}
 
 	template<std::invocable Fn>
 	constexpr fiber(Fn&& func) : fiber({}, std::forward<Fn>(func)) {}
@@ -702,7 +703,7 @@ public:
 		uintptr_t *sp { reinterpret_cast<uintptr_t *>(params.stack->allocate(params.stacksz)) };
 		GetVars();
 		_ctx.reset(new (reinterpret_cast<char*>(sp))
-			fiber_base(std::move(params), std::forward<Fn>(func), sp, cur->get_id()), [](auto *pp) {});
+			fiber_base(std::forward<fiber_params>(params), std::forward<Fn>(func), sp, cur->get_id()), [](auto *pp) {});
 		uni.insert(_ctx);
 		sch.push_back(_ctx);
 		sort_queue(sch);
@@ -1239,7 +1240,7 @@ constexpr async(fiber_params&& params, Fn&& func, Args... args)
 	std::packaged_task<result_type(std::decay_t<Args>...)> task { std::forward<Fn>(func) };
 	std::future<result_type> fut { task.get_future() };
 	const_cast<launch&>(params.policy) = launch::dispatch;
-	fiber(std::move(params), std::move(task), std::forward<Args>(args)...).detach();
+	fiber(std::forward<fiber_params>(params), std::move(task), std::forward<Args>(args)...).detach();
 	return fut;
 }
 
@@ -1249,6 +1250,7 @@ std::future<std::invoke_result_t<std::decay_t<Fn>, std::decay_t<Args>...>>
 constexpr async(Fn&& func, Args... args) { return async({}, std::forward<Fn>(func), std::forward<Args>(args)...); }
 
 //-----------------------------------------------------------------------------------------
+// helper templates
 template<std::invocable... Fns>
 constexpr void launch_all(Fns&& ...funcs)
 {
@@ -1286,6 +1288,20 @@ constexpr void launch_all_with_params_n(C& c, Ps&& params, Fn&& func, Fns&& ...f
       launch_all_with_params_n(c, std::forward<Fns>(funcs)...);
 	else
 		c.begin()->resume();
+}
+
+template<typename T=fiber, typename... Args>
+requires std::derived_from<T, fiber>
+constexpr fiber_ptr make_fiber(Args&&... args)
+{
+	return fiber_ptr(new T(std::forward<Args>(args)...));
+}
+
+template<typename T=fiber, typename... Args>
+requires std::derived_from<T, fiber>
+constexpr fiber_ptr make_fiber(fiber_params&& params, Args&&... args)
+{
+	return fiber_ptr(new T(std::forward<fiber_params>(params), std::forward<Args>(args)...));
 }
 
 //-----------------------------------------------------------------------------------------
