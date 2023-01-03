@@ -37,10 +37,10 @@ Currently only `Linux/x86_64` is supported. Other platforms to be supported in t
 - context switch implemented with inline assembly
 - fibers can be moved to other threads (can be configured out for performance)
 - `std::invoke` style ctor, with arguments perfectly forwarded to the callable
-- extended API, supporting `resume`, `resume_if`, `resume_with`, `kill`, `kill_all`, `suspend`, `schedule`, `join`, `join_if`, `detach`, `resume_main`, `schedule_if`, `move`, `suspend_if`, `wait`  and more
+- extended API, supporting `resume`, `resume_if`, `resume_with`, `kill`, `kill_all`, `suspend`, `schedule`, `join`, `join_if`, `detach`, `resume_main`, `schedule_if`, `move`, `suspend_if`, `wait_all` and more
 - built-in fiber printer
 - optional built-in terminal based monitor
-- helper templates including `async`, `launch_all` and `launch_all_with_params` and more
+- helper templates including `async`, `make_fiber`, `launch_all` and `launch_all_with_params` and more
 - supports `fibers` and `this_fiber` namespaces
 - ctor based fiber parameter struct (POD) - including fiber name, custom stack and stack size, launch policy, launch order and auto join
 - built-in round-robin scheduler
