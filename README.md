@@ -19,7 +19,7 @@ Currently only `Linux/x86_64` is supported. Other platforms to be supported in t
 
 | ![montest2 - example monitor application](https://github.com/fix8mt/fiber/blob/main/assets/fibermonitor1.png) |
 |:--:|
-| Screenshot from *`montest2`* with 20 fibers working in one thread|
+| Screenshot from *`montest2`* with 20 fibers working in one thread and using `fiber_monitor`|
 
 - [wiki]( https://github.com/fix8mt/fiber/wiki) for complete documentation.
 - [API](https://github.com/fix8mt/fiber/wiki/API) for API documentation.
@@ -39,10 +39,10 @@ Currently only `Linux/x86_64` is supported. Other platforms to be supported in t
 - context switch implemented with inline assembly
 - fibers can be moved to other threads (can be configured out for performance)
 - `std::invoke` style ctor, with arguments perfectly forwarded to the callable
-- extended API, supporting `resume`, `resume_if`, `resume_with`, `kill`, `kill_all`, `suspend`, `schedule`, `join`, `join_if`, `detach`, `resume_main`, `schedule_if`, `move`, `suspend_if` and more
-- fiber printer
+- extended API, supporting `resume`, `resume_if`, `resume_with`, `kill`, `kill_all`, `suspend`, `schedule`, `join`, `join_if`, `detach`, `resume_main`, `schedule_if`, `move`, `suspend_if`, `wait`  and more
+- built-in fiber printer
 - optional built-in terminal based monitor
-- helper templates including `async`, `launch_all` and `launch_all_with_params`
+- helper templates including `async`, `launch_all` and `launch_all_with_params` and more
 - supports `fibers` and `this_fiber` namespaces
 - ctor based fiber parameter struct (POD) - including fiber name, custom stack and stack size, launch policy, launch order and auto join
 - built-in round-robin scheduler
@@ -105,7 +105,6 @@ int main(int argc, char *argv[])
 </p>
 </details>
 
-
 <details><summary><i>output</i></summary>
 <p>
 
@@ -135,9 +134,9 @@ main:4
 main:4 (resumed)
 main:5
         func:4 (resumed)
-#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz     flags ord name
-0    * 8576 NaF  NaF       6 0x7f9fb3632ea8 0x7f9fb3613010     352   131072 _________  99 func
-1      NaF  NaF  8576      6 0x7fff7628f8a8              0       0  8388608 m________  99 main
+#      fid  pfid prev   ctxs      stack ptr    stack alloc    depth  stacksz     flags ord name
+0    * 8576 NaF  NaF       6 0x7f9fb3632ea8 0x7f9fb3613010      352   131072 _________  99 func
+1      NaF  NaF  8576      6 0x7fff7628f8a8              0        0  8388608 m________  99 main
         func:exit
 main:5 (resumed)
 flags=true
@@ -229,7 +228,6 @@ int main(int argc, char *argv[])
 
 </p>
 </details>
-
 
 <details><summary><i>output</i></summary>
 <p>
@@ -469,10 +467,10 @@ int main()
    {
       static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
       {{
-         {  R"("I)",    "all",   "said",  "It’s",     "I’m",      "\n –",     },
-         {  "am",       "of",    "no",    "because",  "doing",    "Albert",   },
-         {  "thankful", "those", "to",    "of",       "it",       "Einstein"  },
-         {  "for",      "who",   "me.",   "them",     R"(myself.")",          },
+         {  R"("I )",      "all ",     "said ", "It’s ",    "I’m ",        "\n – ",      },
+         {  "am ",         "of ",      "no ",   "because ", "doing ",      "Albert ",    },
+         {  "thankful ",   "those ",   "to ",   "of ",      "it ",         "Einstein\n"  },
+         {  "for ",        "who ",     "me. ",  "them ",    R"(myself.")",               },
       }};
       for (const auto& pp : wordset)
       {
@@ -480,14 +478,13 @@ int main()
          {
             for (auto qq : words)
             {
-               std::cout << qq << ' ';
+               std::cout << qq;
                this_fiber::yield();
             }
          }, pp).detach();
       }
    }).join();
 
-   std::cout << std::endl;
    return 0;
 }
 ```
@@ -521,7 +518,8 @@ To demonstrate the use of `launch_all` and `launch_all_with_params`,
 one example simply creates the fibers in the order they are defined; the second example creates the fibers with a specifed launch order (hence the need for
 'with params').
 
-The `launch_all` and `launch_all_with_params` templates always detach the fibers they create.
+The `launch_all` and `launch_all_with_params` templates always detach the fibers they create. Two additional versions are also provided - `launch_all_n` and `launch_all_with_params_n`
+which create fibers to a supplied container.  See `f8fibertest27.cpp` for an example.
 
 <details><summary><i>source</i></summary>
 <p>
@@ -538,18 +536,16 @@ int main()
 {
    static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
    {{
-      {  R"("I)",    "all",   "said",  "It’s",     "I’m",                        },
-      {  "for",      "who",   "me.",   "them",     "myself.\"\n"                 },
-      {  "am",       "of",    "no",    "because",  "doing",       "- Albert",    },
-      {  "thankful", "those", "to",    "of",       "it",          "Einstein\n"   },
+      {  R"("I )",      "all ",     "said ",    "It’s ",    "I’m ",                       },
+      {  "for ",        "who ",     "me. ",     "them ",    "myself.\"\n"                 },
+      {  "am ",         "of ",      "no ",      "because ", "doing ",      " - Albert ",  },
+      {  "thankful ",   "those ",   "to ",      "of ",      "it ",         "Einstein\n"   },
    }};
 
    static const auto func([](const auto& words)
    {
       for (auto pp : words)
       {
-         if (static thread_local bool notfirst{}; std::exchange(notfirst, true))
-            std::cout << ' ';
          std::cout << pp;
          this_fiber::yield();
       }
@@ -584,17 +580,15 @@ int main()
 </p>
 </details>
 
-
 <details><summary><i>output</i></summary>
 <p>
 
 ```bash
 $ ./f8fibertest12
 "I for am thankful all who of those said me. no to It’s them because of I’m myself."
- doing it   - Albert Einstein
-
+doing it  - Albert Einstein
 "I am thankful for all of those who said no to me. It’s because of them I’m doing it myself."
-  - Albert Einstein
+ - Albert Einstein
 $
 ```
 
@@ -675,7 +669,7 @@ $
 </p>
 </details>
 
-## 7. Resuming with a different function
+## 7. Resuming with a different callable object
 This example is similar to example #1. However, after a few iterations, the main function resumes the fiber with a new function (in fact it is the
 same function with different arguments). The original function stack is completely overwritten by the new resumed function. To demonstrate the impact of this on
 the stack, a simple object is created that takes a single integer parameter. The ctor shows the parameter value and its address. Note that when the
@@ -825,9 +819,9 @@ int main(int argc, char *argv[])
 ```bash
 $ ./f8fibertest25 1
         starting fiber
-#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz     flags ord name
-0    * NaF  NaF  2544      2 0x7ffffe9423a8              0       0  8388608 m________  99 main
-1      2544 NaF  NaF       1 0x7fa75c873e58 0x7fa75c854010     432   131072 _________  99 fiber
+#      fid  pfid prev   ctxs      stack ptr    stack alloc     depth  stacksz     flags ord name
+0    * NaF  NaF  2544      2 0x7ffffe9423a8              0        0  8388608 m________  99 main
+1      2544 NaF  NaF       1 0x7fa75c873e58 0x7fa75c854010      432   131072 _________  99 fiber
 Exiting from main
 fiber has exited. Terminating application.
 terminate called without an active exception
@@ -835,9 +829,9 @@ Aborted (core dumped)
 $
 $ ./f8fibertest25
         starting jfiber
-#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz     flags ord name
-0    * NaF  NaF  5168      2 0x7ffe8e345e68              0       0  8388608 m________  99 main
-1      5168 NaF  NaF       1 0x7fe177935e58 0x7fe177916010     432   131072 ______j__  99 jfiber
+#      fid  pfid prev   ctxs      stack ptr    stack alloc    depth  stacksz     flags ord name
+0    * NaF  NaF  5168      2 0x7ffe8e345e68              0        0  8388608 m________  99 main
+1      5168 NaF  NaF       1 0x7fe177935e58 0x7fe177916010      432   131072 ______j__  99 jfiber
 Exiting from main
         jfiber: 1
         jfiber: 2
@@ -959,9 +953,9 @@ main 0
         140162105964928 second 1
 main1 1
 Thread id 140162099050176
-#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz     flags ord name
-0    * NaF  NaF  640       2 0x7f7a081fea18              0       0  8388608 m________  99 main
-1      640  NaF  NaF       1 0x7f7a000209e8 0x7f7a00000ba0     432   131072 ______j__  99 thread:first
+#      fid  pfid prev   ctxs      stack ptr    stack alloc    depth  stacksz     flags ord name
+0    * NaF  NaF  640       2 0x7f7a081fea18              0        0  8388608 m________  99 main
+1      640  NaF  NaF       1 0x7f7a000209e8 0x7f7a00000ba0      432   131072 ______j__  99 thread:first
 main 1
         140162105964928 first 2
         140162099050176 thread:first 2
@@ -979,10 +973,10 @@ main 3
 main1 4
 main 4
 Thread id 140162105964928
-#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz     flags ord name
-0    * NaF  NaF  9152      5 0x7ffc66f3bb38              0       0  8388608 m________  99 main
-1      2736 NaF  NaF       4 0x7f7a088e2e58 0x7f7a088c3010     432   131072 _________  99 first
-2      9152 NaF  2736      4 0x7f7a08893e58 0x7f7a08874010     432   131072 _________  99 second
+#      fid  pfid prev   ctxs      stack ptr    stack alloc    depth  stacksz     flags ord name
+0    * NaF  NaF  9152      5 0x7ffc66f3bb38              0        0  8388608 m________  99 main
+1      2736 NaF  NaF       4 0x7f7a088e2e58 0x7f7a088c3010      432   131072 _________  99 first
+2      9152 NaF  2736      4 0x7f7a08893e58 0x7f7a08874010      432   131072 _________  99 second
         140162105964928 first 5
         140162099050176 thread:first 5
         140162105964928 second 5
@@ -1002,9 +996,9 @@ main 8
         140162099050176 thread:first 7
 main 9
 Thread id 140162105964928
-#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz     flags ord name
-0    * NaF  NaF  9152     10 0x7ffc66f3bb38              0       0  8388608 m________  99 main
-1      9152 NaF  NaF       9 0x7f7a08893e58 0x7f7a08874010     432   131072 _________  99 second
+#      fid  pfid prev   ctxs      stack ptr    stack alloc    depth  stacksz     flags ord name
+0    * NaF  NaF  9152     10 0x7ffc66f3bb38              0        0  8388608 m________  99 main
+1      9152 NaF  NaF       9 0x7f7a08893e58 0x7f7a08874010      432   131072 _________  99 second
         140162105964928 second 10
         140162099050176 first 7
 main 10
@@ -1012,8 +1006,8 @@ main 10
 main 11
 waiting at join...
 Thread id 140162105964928
-#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz     flags ord name
-0    * NaF  NaF  9152     12 0x7ffc66f3bb38              0       0  8388608 m________  99 main
+#      fid  pfid prev   ctxs      stack ptr    stack alloc    depth  stacksz     flags ord name
+0    * NaF  NaF  9152     12 0x7ffc66f3bb38              0        0  8388608 m________  99 main
 main1 7
         140162099050176 thread:first 8
         140162099050176 first 8
@@ -1022,10 +1016,10 @@ main1 8
         140162099050176 first 9
 main1 9
 Thread id 140162099050176
-#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz     flags ord name
-0    * NaF  NaF  2736     10 0x7f7a081fea18              0       0  8388608 m________  99 main
-1      640  NaF  NaF       9 0x7f7a000209e8 0x7f7a00000ba0     432   131072 ______j__  99 thread:first
-2      2736 NaF  640       9 0x7f7a088e2e58 0x7f7a088c3010     432   131072 ________v  99 first
+#      fid  pfid prev   ctxs      stack ptr    stack alloc    depth  stacksz     flags ord name
+0    * NaF  NaF  2736     10 0x7f7a081fea18              0        0  8388608 m________  99 main
+1      640  NaF  NaF       9 0x7f7a000209e8 0x7f7a00000ba0      432   131072 ______j__  99 thread:first
+2      2736 NaF  640       9 0x7f7a088e2e58 0x7f7a088c3010      432   131072 ________v  99 first
         140162099050176 thread:first 10
         140162099050176 first 10
 main1 10
@@ -1169,14 +1163,14 @@ int main(void)
 
 ```
 $ ./f8fibertest
-#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz     flags ord name
-0    * NaF  NaF  NaF       1              0              0       0  8388608 m________  99 main
-1      9072 NaF  NaF       0 0x563f8b3a9690 0x563f8b3a8ee0      72     2048 _____n___  99
-2      2352 NaF  NaF       0 0x563f8b3adb60 0x563f8b3a9bb0      72    16384 _____n___  99
-3      8864 NaF  NaF       0 0x563f8b3b5be0 0x563f8b3adc30      72    32768 _____n___  99
-4      1728 NaF  NaF       0 0x563f8b3b7c40 0x563f8b3b5c90      72     8192 _____n___  99
-5      2976 NaF  NaF       0 0x7f905fc76fc0 0x7f905fc57010      72   131072 _____n___  99
-6      1728 NaF  NaF       0 0x7f905f913fb0 0x7f905f8f4000      72   131072 _____n___  99 sub lambda
+#      fid  pfid prev   ctxs      stack ptr    stack alloc    depth  stacksz     flags ord name
+0    * NaF  NaF  NaF       1              0              0        0  8388608 m________  99 main
+1      9072 NaF  NaF       0 0x563f8b3a9690 0x563f8b3a8ee0       72     2048 _____n___  99
+2      2352 NaF  NaF       0 0x563f8b3adb60 0x563f8b3a9bb0       72    16384 _____n___  99
+3      8864 NaF  NaF       0 0x563f8b3b5be0 0x563f8b3adc30       72    32768 _____n___  99
+4      1728 NaF  NaF       0 0x563f8b3b7c40 0x563f8b3b5c90       72     8192 _____n___  99
+5      2976 NaF  NaF       0 0x7f905fc76fc0 0x7f905fc57010       72   131072 _____n___  99
+6      1728 NaF  NaF       0 0x7f905f913fb0 0x7f905f8f4000       72   131072 _____n___  99 sub lambda
 hello
 sub8    starting 8
         sub8 8: 1
@@ -1190,14 +1184,14 @@ sub3    starting 3
         sub12 12: 1
         lambda starting 15
         sub lambda 15: 1
-#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz     flags ord name
-0    * NaF  NaF  1728      2 0x7ffebd5d1368              0       0  8388608 m________  99 main
-1      1728 NaF  NaF       1 0x563f8b3b7a68 0x563f8b3b5c90     544     8192 _________  99 sub8
-2      2352 NaF  1728      1 0x563f8b3ad998 0x563f8b3a9bb0     528    16384 _________  99 sub4
-3      8864 NaF  2352      1 0x563f8b3b5a08 0x563f8b3adc30     544    32768 _________  99 sub5
-4      9072 NaF  8864      1 0x563f8b3a94b8 0x563f8b3a8ee0     544     2048 _________  99 sub3
-5      2976 NaF  9072      1 0x7f905fc76dd8 0x7f905fc57010     560   131072 __s______  99 sub12
-6      1728 NaF  2976      1 0x7f905f913e68 0x7f905f8f4000     400   131072 _________  99 sub lambda
+#      fid  pfid prev   ctxs      stack ptr    stack alloc    depth  stacksz     flags ord name
+0    * NaF  NaF  1728      2 0x7ffebd5d1368              0        0  8388608 m________  99 main
+1      1728 NaF  NaF       1 0x563f8b3b7a68 0x563f8b3b5c90      544     8192 _________  99 sub8
+2      2352 NaF  1728      1 0x563f8b3ad998 0x563f8b3a9bb0      528    16384 _________  99 sub4
+3      8864 NaF  2352      1 0x563f8b3b5a08 0x563f8b3adc30      544    32768 _________  99 sub5
+4      9072 NaF  8864      1 0x563f8b3a94b8 0x563f8b3a8ee0      544     2048 _________  99 sub3
+5      2976 NaF  9072      1 0x7f905fc76dd8 0x7f905fc57010      560   131072 __s______  99 sub12
+6      1728 NaF  2976      1 0x7f905f913e68 0x7f905f8f4000      400   131072 _________  99 sub lambda
         sub8 8: 2
         sub4 4: 2
         sub5 5: 2
@@ -1214,37 +1208,37 @@ main: 1
         sub4 4: 4
         sub5 5: 4
         leaving 3
-#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz     flags ord name
-0    * 9072 NaF  8864      4 0x563f8b3a94b8 0x563f8b3a8ee0     544     2048 _________  99 sub3
-1      1728 NaF  9072      3 0x7f905f913e68 0x7f905f8f4000     400   131072 _________  99 sub lambda
-2      NaF  NaF  1728      4 0x7ffebd5d1368              0       0  8388608 m________  99 main
-3      1728 NaF  NaF       4 0x563f8b3b7a68 0x563f8b3b5c90     544     8192 _________  99 sub8
-4      2976 NaF  9072      1 0x7f905fc76dd8 0x7f905fc57010     560   131072 __s______  99 sub12
-5      2352 NaF  1728      4 0x563f8b3ad998 0x563f8b3a9bb0     528    16384 _________  99 sub4
-6      8864 NaF  2352      4 0x563f8b3b5a08 0x563f8b3adc30     544    32768 _________  99 sub5
+#      fid  pfid prev   ctxs      stack ptr    stack alloc    depth  stacksz     flags ord name
+0    * 9072 NaF  8864      4 0x563f8b3a94b8 0x563f8b3a8ee0      544     2048 _________  99 sub3
+1      1728 NaF  9072      3 0x7f905f913e68 0x7f905f8f4000      400   131072 _________  99 sub lambda
+2      NaF  NaF  1728      4 0x7ffebd5d1368              0        0  8388608 m________  99 main
+3      1728 NaF  NaF       4 0x563f8b3b7a68 0x563f8b3b5c90      544     8192 _________  99 sub8
+4      2976 NaF  9072      1 0x7f905fc76dd8 0x7f905fc57010      560   131072 __s______  99 sub12
+5      2352 NaF  1728      4 0x563f8b3ad998 0x563f8b3a9bb0      528    16384 _________  99 sub4
+6      8864 NaF  2352      4 0x563f8b3b5a08 0x563f8b3adc30      544    32768 _________  99 sub5
         sub lambda 15: 4
 main: 2
         sub8 8: 5
         leaving 4
-#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz     flags ord name
-0    * 2352 NaF  1728      5 0x563f8b3ad998 0x563f8b3a9bb0     528    16384 _________  99 sub4
-1      8864 NaF  2352      4 0x563f8b3b5a08 0x563f8b3adc30     544    32768 _________  99 sub5
-2      9072 NaF  8864      4 0x563f8b3a9588 0x563f8b3a8ee0     336     2048 _f_______  99 sub3
-3      1728 NaF  9072      4 0x7f905f913e68 0x7f905f8f4000     400   131072 _________  99 sub lambda
-4      NaF  NaF  1728      5 0x7ffebd5d1368              0       0  8388608 m________  99 main
-5      2976 NaF  9072      1 0x7f905fc76dd8 0x7f905fc57010     560   131072 __s______  99 sub12
-6      1728 NaF  NaF       5 0x563f8b3b7a68 0x563f8b3b5c90     544     8192 _________  99 sub8
+#      fid  pfid prev   ctxs      stack ptr    stack alloc    depth  stacksz     flags ord name
+0    * 2352 NaF  1728      5 0x563f8b3ad998 0x563f8b3a9bb0      528    16384 _________  99 sub4
+1      8864 NaF  2352      4 0x563f8b3b5a08 0x563f8b3adc30      544    32768 _________  99 sub5
+2      9072 NaF  8864      4 0x563f8b3a9588 0x563f8b3a8ee0      336     2048 _f_______  99 sub3
+3      1728 NaF  9072      4 0x7f905f913e68 0x7f905f8f4000      400   131072 _________  99 sub lambda
+4      NaF  NaF  1728      5 0x7ffebd5d1368              0        0  8388608 m________  99 main
+5      2976 NaF  9072      1 0x7f905fc76dd8 0x7f905fc57010      560   131072 __s______  99 sub12
+6      1728 NaF  NaF       5 0x563f8b3b7a68 0x563f8b3b5c90      544     8192 _________  99 sub8
         sub5 5: 5
         sub lambda 15: 5
 main: 3
         sub8 8: 6
         leaving 5
-#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz     flags ord name
-0    * 8864 NaF  1728      6 0x563f8b3b5a08 0x563f8b3adc30     544    32768 _________  99 sub5
-1      1728 NaF  8864      5 0x7f905f913e68 0x7f905f8f4000     400   131072 _________  99 sub lambda
-2      2976 NaF  9072      1 0x7f905fc76dd8 0x7f905fc57010     560   131072 __s______  99 sub12
-3      NaF  NaF  1728      6 0x7ffebd5d1368              0       0  8388608 m________  99 main
-4      1728 NaF  NaF       6 0x563f8b3b7a68 0x563f8b3b5c90     544     8192 _________  99 sub8
+#      fid  pfid prev   ctxs      stack ptr    stack alloc    depth  stacksz     flags ord name
+0    * 8864 NaF  1728      6 0x563f8b3b5a08 0x563f8b3adc30      544    32768 _________  99 sub5
+1      1728 NaF  8864      5 0x7f905f913e68 0x7f905f8f4000      400   131072 _________  99 sub lambda
+2      2976 NaF  9072      1 0x7f905fc76dd8 0x7f905fc57010      560   131072 __s______  99 sub12
+3      NaF  NaF  1728      6 0x7ffebd5d1368              0        0  8388608 m________  99 main
+4      1728 NaF  NaF       6 0x563f8b3b7a68 0x563f8b3b5c90      544     8192 _________  99 sub8
         sub lambda 15: 6
 main: 4
         sub8 8: 7
@@ -1254,11 +1248,11 @@ main: 5
         sub lambda 15: 8
 main: 6
         leaving 8
-#      fid  pfid prev   ctxs      stack ptr    stack alloc   depth  stacksz     flags ord name
-0    * 1728 NaF  NaF       9 0x563f8b3b7a68 0x563f8b3b5c90     544     8192 _________  99 sub8
-1      2976 NaF  9072      1 0x7f905fc76dd8 0x7f905fc57010     560   131072 __s______  99 sub12
-2      1728 NaF  1728      8 0x7f905f913e68 0x7f905f8f4000     400   131072 _________  99 sub lambda
-3      NaF  NaF  1728      9 0x7ffebd5d1368              0       0  8388608 m________  99 main
+#      fid  pfid prev   ctxs      stack ptr    stack alloc    depth  stacksz     flags ord name
+0    * 1728 NaF  NaF       9 0x563f8b3b7a68 0x563f8b3b5c90      544     8192 _________  99 sub8
+1      2976 NaF  9072      1 0x7f905fc76dd8 0x7f905fc57010      560   131072 __s______  99 sub12
+2      1728 NaF  1728      8 0x7f905f913e68 0x7f905f8f4000      400   131072 _________  99 sub lambda
+3      NaF  NaF  1728      9 0x7ffebd5d1368              0        0  8388608 m________  99 main
         sub lambda 15: 9
 main: 7
         sub lambda 15: 10
@@ -1338,7 +1332,7 @@ Note that the location of B is not deterministic.
 <p>
 
 ```c++
-#include <iostream>
+#include <cstdio>
 #include <thread>
 #include <fix8/f8fiber.hpp>
 using namespace FIX8;
@@ -1347,28 +1341,28 @@ int main()
 {
    static int ii{};
 
-   fiber([]() // print_a
+   fiber([]()
    {
       do
       {
-         std::cout << 'a';
+         std::printf("%c", 'a');
          this_fiber::yield();
       }
       while (++ii < 20);
    }).detach();
 
-   fiber([]() // print_b
+   fiber([]()
    {
       do
       {
-         std::cout << 'b';
-         std::thread([]() { std::cout << 'B'; }).detach();
+         std::printf("%c", 'b');
+         std::thread([]() { std::printf("%c", 'B'); }).detach();
          this_fiber::yield();
       }
       while (++ii < 20);
    }).detach();
 
-   std::cout << 'X';
+   std::printf("%c", 'X');
    return 0;
 }
 ```
@@ -1381,13 +1375,13 @@ int main()
 
 ```bash
 $ ./f8fibertest7
-XabababBabBabBBabababBBababBBaBB
+XabababBabBBabBababBabBabBBabBaB
 $
 $ ./f8fibertest7
-XababBababBabBababBabBBabBBabBa
+XabababBabBBabBabBabBababBabBaBB
 $
 $ ./f8fibertest7
-XabababBabBBababBabBabBBabBabaBB
+XabababBabBBabBabBababBababBBBaB
 $
 ```
 
