@@ -34,7 +34,9 @@
 #include <iostream>
 #include <string_view>
 #include <array>
-#include <fix8/f8fiber.hpp>
+#include <list>
+#include <utility>
+#include <fix8/fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
@@ -42,27 +44,46 @@ using namespace FIX8;
 //-----------------------------------------------------------------------------------------
 int main()
 {
-	std::thread([]()
+	static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
+	{{
+		{	R"("I )",		"all ",		"said ",		"It’s ",		"I’m ",								},
+		{	"for ",			"who ",		"me. ",		"them ",		"myself.\"\n"						},
+		{	"am ",			"of ",		"no ",		"because ",	"doing ",		" - Albert ",	},
+		{	"thankful ",	"those ",	"to ",		"of ",		"it ",			"Einstein\n"	},
+	}};
+
+	const auto func([](const auto& words)
 	{
-		static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
-		{{
-			{	R"("I )",		"all ",		"said ",	"It’s ",		"I’m ",			"\n – ",			},
-			{	"am ",			"of ",		"no ",	"because ",	"doing ",		"Albert ",		},
-			{	"thankful ",	"those ",	"to ",	"of ",		"it ",			"Einstein\n"	},
-			{	"for ",			"who ",		"me. ",	"them ",		R"(myself.")",						},
-		}};
-		for (const auto& pp : wordset)
+		for (auto pp : words)
 		{
-			fiber ([](const auto& words)
-			{
-				for (auto qq : words)
-				{
-					std::cout << qq;
-					this_fiber::yield();
-				}
-			}, pp).detach();
+			std::cout << pp;
+			this_fiber::yield();
 		}
-	}).join();
+	});
+
+	std::list<fiber> sts;
+
+	launch_all_n
+	(
+	 	sts,
+		std::bind(func, wordset[0]),
+		std::bind(func, wordset[1]),
+		std::bind(func, wordset[2]),
+		std::bind(func, wordset[3])
+	);
+	fibers::wait_all();
+
+	sts.clear();
+	fibers::set_flag(global_fiber_flags::skipmain);
+
+	launch_all_with_params_n
+	(
+	 	sts,
+		fiber_params{.launch_order=0}, std::bind(func, wordset[0]),
+		fiber_params{.launch_order=3}, std::bind(func, wordset[1]),
+		fiber_params{.launch_order=1}, std::bind(func, wordset[2]),
+		fiber_params{.launch_order=2}, std::bind(func, wordset[3])
+	);
 
 	return 0;
 }

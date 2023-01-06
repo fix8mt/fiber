@@ -31,62 +31,75 @@
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
-#include <queue>
-#include <random>
-#include <fix8/f8fiber.hpp>
+#include <iostream>
+#include <functional>
+#include <deque>
+#include <set>
+#include <future>
+#include <fix8/fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
 
 //-----------------------------------------------------------------------------------------
-class foo
+struct blah
 {
-	std::queue<long> _queue;
-   fiber _produce, _consume;
+	~blah() { std::cout << "~blah()\n"; }
+};
 
-   void producer(int numtogen)
-   {
-		std::cout << "\tproducer:entry (id:" << this_fiber::get_id() << ")\n";
-		std::mt19937_64 rnde {std::random_device{}()};
-		auto dist{std::uniform_int_distribution<long>(1, std::numeric_limits<long>().max())};
-      for (; numtogen; --numtogen)
-      {
-			while(_queue.size() < 5)
-				_queue.push(dist(rnde));
-			std::cout << "\tproduced: " << _queue.size() << '\n';
-			_consume.resume(); // switch to consumer
-      }
-		_consume.schedule(); // consumer is next fiber to run
-      std::cout << "\tproducer:exit\n";
-   }
-   void consumer()
-   {
-		std::cout << "\tconsumer:entry (id:" << this_fiber::get_id() << ")\n";
-      while (_produce)
-      {
-			std::cout << "\tconsuming: " << _queue.size() << '\n';
-			while(!_queue.empty())
-			{
-				std::cout << "\t\t" << _queue.front() << '\n';
-				_queue.pop();
-			}
-			_produce.resume(); // switch to producer
-      }
-      std::cout << "\tconsumer:exit\n";
-   }
-
-public:
-   foo(int num) : _produce(&foo::producer, this, num), _consume(&foo::consumer, this)
+struct foo
+{
+	void sub(int arg, std::promise<int>& pr)
 	{
-		_produce.resume(); // switch to producer
+		blah b;
+		try
+		{
+			std::cout << "\tstarting " << arg << '\n';
+			for (int ii{}; ii < arg; )
+			{
+				std::cout << '\t' << arg << ": " << ++ii << '\n';
+				this_fiber::yield();
+			}
+			//pr.set_value(arg * 100);
+			std::cout << "\tleaving " << arg << '\n';
+			throw std::runtime_error("test exception");
+		}
+		catch (...)
+		{
+			try
+			{
+				pr.set_exception(std::current_exception());
+			}
+			catch(...)
+			{
+				std::cerr << "pr.set_exception(std::current_exception()) threw\n";
+			}
+		}
 	}
+	~foo() { std::cout << "~foo()\n"; }
 };
 
 //-----------------------------------------------------------------------------------------
-int main(int argc, char *argv[])
+int main(void)
 {
-   std::cout << "main:entry\n";
-   foo(argc > 1 ? std::stoi(argv[1]) : 10);
-   std::cout << "main:exit\n";
-   return 0;
+	foo bar;
+	std::promise<int> mypromise;
+	auto myfuture { mypromise.get_future() };
+	fiber sub_co(&foo::sub, &bar, 10, std::ref(mypromise));
+	for (int ii{}; sub_co; )
+	{
+		std::cout << "main: " << ++ii << '\n';
+		this_fiber::yield();
+	}
+	try
+	{
+		std::cout << "Future result = " << myfuture.get() << '\n';
+		sub_co.join_if();
+	}
+	catch (const std::exception& e)
+	{
+		std::cerr << "\nException: " << e.what() << '\n';
+	}
+	std::cout << "Exiting from main\n";
+	return 0;
 }

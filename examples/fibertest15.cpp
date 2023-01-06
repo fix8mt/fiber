@@ -32,50 +32,65 @@
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
 #include <iostream>
-#include <functional>
-#include <deque>
-#include <array>
-#include <fix8/f8fiber.hpp>
+#include <string_view>
+#include <thread>
+#include <chrono>
+#include <fix8/fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
+using namespace std::literals;
 
 //-----------------------------------------------------------------------------------------
-void func(int arg)
+class blah
 {
-	const std::string tag { std::string(this_fiber::name()) + ' ' + std::to_string(arg) };
-	std::cout << "\tstarting " << tag << '\n';
-	for (int ii{}; ii < arg; this_fiber::yield())
-		std::cout << "\t\t" << tag << ": " << ++ii << '\n';
-	std::cout << "\tleaving " << tag << '\n';
-	fibers::print();
+	std::string_view tabs;
+public:
+	blah() = default;
+	blah(std::string_view tb) : tabs(std::move(tb)) {}
+	~blah() { std::cout << tabs << "~blah(): " << this_fiber::name() << '\n'; }
+};
+
+void doit_with_stoprequest(bool& stop_requested)
+{
+	blah b("\t");
+	bool waitagain{};
+	std::cout << '\t' << "Starting " << this_fiber::name() << '\n';
+	for(int ii{};; this_fiber::yield())
+	{
+		std::cout << '\t' << this_fiber::name() << ": " << ++ii << '\n';
+		if (stop_requested)
+		{
+			if (waitagain)
+			{
+				std::cout << '\t' << this_fiber::name() << ": stop actioned\n";
+				break;
+			}
+			else
+			{
+				std::cout << '\t' << this_fiber::name() << ": stop requested\n";
+				waitagain = true;
+			}
+		}
+	}
+	std::cout << '\t' << "Leaving " << this_fiber::name() << '\n';
 }
 
 //-----------------------------------------------------------------------------------------
 int main(void)
 {
-	auto stack_memory { std::make_unique<char[]>(32768) };
-	std::array<fiber, 12> fbs
-	{{
-		{ {.name="sub01",.stacksz=8192}, &func, 3 },
-		{ {.name="sub02",.stacksz=8192}, &func, 6 },
-		{ {.name="sub03",.stacksz=8192}, &func, 9 },
-		{ {.name="sub04",.stacksz=8192}, &func, 12 },
-		{ {.name="sub05",.stacksz=8192,.stack=make_stack<stack_type::placement>(stack_memory.get())}, &func, 3 },
-		{ {.name="sub06",.stacksz=8192,.stack=make_stack<stack_type::placement>(stack_memory.get(), 8192)}, &func, 6 },
-		{ {.name="sub07",.stacksz=8192,.stack=make_stack<stack_type::placement>(stack_memory.get(), 2 * 8192)}, &func, 9 },
-		{ {.name="sub08",.stacksz=8192,.stack=make_stack<stack_type::placement>(stack_memory.get(), 3 * 8192)}, &func, 12 },
-		{ {.name="sub09",.stacksz=8192,.stack=make_stack<stack_type::mapped>()}, &func, 3 },
-		{ {.name="sub10",.stacksz=8192,.stack=make_stack<stack_type::mapped>()}, &func, 6 },
-		{ {.name="sub11",.stacksz=8192,.stack=make_stack<stack_type::mapped>()}, &func, 9 },
-		{ {.name="sub12",.stacksz=8192,.stack=make_stack<stack_type::mapped>()}, &func, 12 }
-	}};
-	fibers::print();
-	for (int ii{}; fibers::has_fibers(); ++ii)
+	std::cout << "Starting " << this_fiber::name() << '\n';
+	blah b;
+	bool stop_requested{};
+	fiber sub_co({.name="sub",.join=true}, &doit_with_stoprequest, std::ref(stop_requested));
+	for (int ii{}; ii < 5; this_fiber::yield())
 	{
-		std::cout << "main: " << std::dec << ii << '\n';
-		this_fiber::yield();
+		std::cout << this_fiber::name() << ": " << ++ii << '\n';
+		std::this_thread::sleep_for(100ms);
 	}
-	std::cout << "Exiting from main\n";
+	stop_requested = true;
+	this_fiber::yield();
+	fibers::print();
+	std::cout << "Exiting " << this_fiber::name() << '\n';
 	return 0;
 }

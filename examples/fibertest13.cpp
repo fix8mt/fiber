@@ -35,44 +35,52 @@
 #include <functional>
 #include <deque>
 #include <set>
-#include <future>
-#include <fix8/f8fiber.hpp>
+#include <fix8/fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
+using namespace std::literals;
+
+//-----------------------------------------------------------------------------------------
+struct blah
+{
+	~blah() { std::cout << "~blah() - " << this_fiber::name() << '\n'; }
+};
+void doit(int arg)
+{
+	blah b;
+	std::cout << "\tstarting " << this_fiber::name() << ' ' << arg << '\n';
+	for (int ii{}; ii < arg; )
+	{
+		std::cout << '\t' << this_fiber::name() << ' ' << arg << ": " << ++ii << '\n';
+		this_fiber::yield();
+	}
+	std::cout << "\tleaving " << this_fiber::name() << ' ' << arg << '\n';
+}
 
 //-----------------------------------------------------------------------------------------
 int main(void)
 {
-	try
+	fiber sub_co({.name="sub0"}, &doit, 9), sub_co1({.name="sub1"}, &doit, 10);
+	fibers::print();
+	for (int ii{}; fibers::has_fibers(); ++ii)
 	{
-		std::promise<int> mypromise;
-		auto myfuture { mypromise.get_future() };
-		fiber sub_co([](int arg, std::promise<int>& pr)
+		if (ii == 2)
 		{
-			std::cout << "\tstarting " << arg << '\n';
-			for (int ii{}; ii < arg; )
-			{
-				std::cout << '\t' << arg << ": " << ++ii << '\n';
-				this_fiber::yield();
-			}
-			pr.set_value(arg * 100);
-			std::cout << "\tleaving " << arg << '\n';
-		}, 10, std::ref(mypromise));
-
-		for (int ii{}; sub_co; )
-		{
-			std::cout << "main: " << ++ii << '\n';
-			this_fiber::yield();
+			fibers::print();
+			sub_co1.suspend();
+			fibers::print();
 		}
-		std::cout << "Exiting from main\n";
-		std::cout << "Future result = " << myfuture.get() << '\n';
-		//if (myfuture.valid())
-		std::cout << "Repeated result (should throw exception) = " << myfuture.get() << '\n';
+		if (ii == 6)
+		{
+			fibers::print();
+			sub_co1.unsuspend();
+			fibers::print();
+		}
+		this_fiber::yield();
+		std::cout << "main: " << std::dec << ii << '\n';
 	}
-	catch (const std::future_error& e)
-	{
-		std::cerr << "Exception: " << e.what() << '(' << e.code() << ")\n";
-	}
+	std::cout << "Exiting from main\n";
+	fibers::print();
 	return 0;
 }

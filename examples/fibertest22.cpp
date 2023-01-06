@@ -31,57 +31,62 @@
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
-#include <iostream>
-#include <functional>
-#include <deque>
-#include <set>
-#include <fix8/f8fiber.hpp>
+#include <queue>
+#include <random>
+#include <fix8/fiber.hpp>
 
-// CC=gcc CXX="g++ -ggdb" CXXFLAGS=-O0 -DCMAKE_BUILD_TYPE=Debug cmake ..
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
-using namespace std::literals;
 
 //-----------------------------------------------------------------------------------------
-struct blah
+class foo
 {
-	~blah() { std::cout << "~blah() - " << this_fiber::name() << '\n'; }
+	std::queue<long> _queue;
+   fiber _produce, _consume;
+
+   void producer(int numtogen)
+   {
+		std::cout << "\tproducer:entry (id:" << this_fiber::get_id() << ")\n";
+		std::mt19937_64 rnde {std::random_device{}()};
+		auto dist{std::uniform_int_distribution<long>(1, std::numeric_limits<long>().max())};
+      for (; numtogen; --numtogen)
+      {
+			while(_queue.size() < 5)
+				_queue.push(dist(rnde));
+			std::cout << "\tproduced: " << _queue.size() << '\n';
+			_consume.resume(); // switch to consumer
+      }
+		_consume.schedule(); // consumer is next fiber to run
+      std::cout << "\tproducer:exit\n";
+   }
+   void consumer()
+   {
+		std::cout << "\tconsumer:entry (id:" << this_fiber::get_id() << ")\n";
+      while (_produce)
+      {
+			std::cout << "\tconsuming: " << _queue.size() << '\n';
+			while(!_queue.empty())
+			{
+				std::cout << "\t\t" << _queue.front() << '\n';
+				_queue.pop();
+			}
+			_produce.resume(); // switch to producer
+      }
+      std::cout << "\tconsumer:exit\n";
+   }
+
+public:
+   foo(int num) : _produce(&foo::producer, this, num), _consume(&foo::consumer, this)
+	{
+		_produce.resume(); // switch to producer
+	}
 };
-void doit(int arg)
-{
-	blah b;
-	std::cout << "\tstarting " << this_fiber::name() << ' ' << arg << '\n';
-	for (int ii{}; ii < arg; )
-	{
-		std::cout << '\t' << this_fiber::name() << ' ' << arg << ": " << ++ii << '\n';
-		this_fiber::yield();
-	}
-	std::cout << "\tleaving " << this_fiber::name() << ' ' << arg << '\n';
-}
 
 //-----------------------------------------------------------------------------------------
-int main(void)
+int main(int argc, char *argv[])
 {
-	fiber sub_co({.name="sub0"}, &doit, 9), sub_co1({.name="sub1"}, &doit, 10);
-	fibers::print();
-	for (int ii{}; fibers::has_fibers(); ++ii)
-	{
-		if (ii == 2)
-		{
-			fibers::print();
-			sub_co1.suspend();
-			fibers::print();
-		}
-		if (ii == 6)
-		{
-			fibers::print();
-			sub_co1.unsuspend();
-			fibers::print();
-		}
-		this_fiber::yield();
-		std::cout << "main: " << std::dec << ii << '\n';
-	}
-	std::cout << "Exiting from main\n";
-	fibers::print();
-	return 0;
+   std::cout << "main:entry\n";
+   foo(argc > 1 ? std::stoi(argv[1]) : 10);
+   std::cout << "main:exit\n";
+   return 0;
 }

@@ -23,9 +23,18 @@ Currently only `Linux/x86_64` is supported. Other platforms to be supported in t
 - [API](https://github.com/fix8mt/fiber/wiki/API) for API documentation.
 - [Building](https://github.com/fix8mt/fiber/wiki/Building) for build options and settings
 - [Monitor](https://github.com/fix8mt/fiber/wiki/Monitor) for built-in monitor documentation.
-- [here](https://github.com/fix8mt/fiber/blob/main/include/fix8/f8fiber.hpp) for implementation.
+- [here](https://github.com/fix8mt/fiber/blob/main/include/fix8/fiber.hpp) for implementation.
 
 - [here](https://github.com/fix8mt/fiber/tree/f8_fiber_boost) for the original `f8fiber` implementation.
+
+## Motivation
+
+- header-only
+- `std::thread` like interface
+- no external dependencies
+- easy to use, lightweight
+- make use of C++20 features
+- constexpr where possible
 
 ## Features
 
@@ -51,6 +60,7 @@ Currently only `Linux/x86_64` is supported. Other platforms to be supported in t
 - lots of [examples](https://github.com/fix8mt/fiber/tree/main/examples)
 - full [API](https://github.com/fix8mt/fiber/wiki/API) documentation
 - supports `jfiber` (similar to `std::jthread`)
+- works with gcc, clang
 
 # Examples
 ## 1. A simple resumable function
@@ -64,7 +74,7 @@ Note that you can name a fiber using `fiber_params`, and using designated initia
 <p>
 
 ```c++
-#include <fix8/f8fiber.hpp>
+#include <fix8/fiber.hpp>
 using namespace FIX8;
 
 void func (bool& flags, int cnt)
@@ -107,7 +117,7 @@ int main(int argc, char *argv[])
 <p>
 
 ```bash
-$ ./f8fibertest0
+$ ./fibertest0
 main:entry
 flags=false
 main:0
@@ -169,7 +179,7 @@ but since the `_produce` fiber has exited, `while (_produce)` will return `false
 ```c++
 #include <queue>
 #include <random>
-#include <fix8/f8fiber.hpp>
+#include <fix8/fiber.hpp>
 using namespace FIX8;
 
 class foo
@@ -231,7 +241,7 @@ int main(int argc, char *argv[])
 <p>
 
 ```bash
-$ ./f8fibertest22 5
+$ ./fibertest22 5
 main:entry
     producer:entry (id:1264)
     produced: 5
@@ -309,7 +319,7 @@ parameter.
 #include <string_view>
 #include <random>
 #include <exception>
-#include <fix8/f8fiber.hpp>
+#include <fix8/fiber.hpp>
 using namespace FIX8;
 
 class Reader : public fiber
@@ -419,7 +429,7 @@ of yields back to the caller are reported.
 <p>
 
 ```bash
-$ ./f8fibertest26 20
+$ ./fibertest26 20
 124 LctFjN/09NBZ mDPtFqvztmHWflL67CqtFWiJmG6FKsYgEnMzDRPCf0xm5FysuVHh+x0NrSISh4Z9p4PptyxP+w1ewI4rsBAAG8Hb76nbKbt8yLNg NhDTxR2Asw
 113 1mx5RNdVJisFj lEc8IFOQ1uvlV2e8w5WOjT4+I3atpf6cor4pW6qAhggUQ6nIoGbM+BVTZ8bsjoLVNmIVoQIH/G1P5etK0gEg7cIa 2YI/4unCoF
 114 mCQ7o0gV+oC6 ljEQArWk+9Z5Kk0tZasyowLb7rBAJH7Ien/MqXT6hqI7ycrSCVtf9ObUotjTgLpWpF77dGD3u478gPTwHEIKbw8Bg8 uIGaY/BghC
@@ -456,7 +466,7 @@ Note the ctor for each fiber takes a reference to one of the `string_view` array
 #include <string_view>
 #include <thread>
 #include <array>
-#include <fix8/f8fiber.hpp>
+#include <fix8/fiber.hpp>
 using namespace FIX8;
 
 int main()
@@ -494,7 +504,7 @@ int main()
 <p>
 
 ```bash
-$ ./f8fibertest10
+$ ./fibertest10
 "I am thankful for all of those who said no to me. It’s because of them I’m doing it myself."
  – Albert Einstein
 $
@@ -517,7 +527,7 @@ one example simply creates the fibers in the order they are defined; the second 
 'with params').
 
 The `launch_all` and `launch_all_with_params` templates always detach the fibers they create. Two additional versions are also provided - `launch_all_n` and `launch_all_with_params_n`
-which create fibers to a supplied container.  See `f8fibertest27.cpp` for an example.
+which create fibers to a supplied container.  See `fibertest27.cpp` for an example.
 
 <details><summary><i>source</i></summary>
 <p>
@@ -527,7 +537,7 @@ which create fibers to a supplied container.  See `f8fibertest27.cpp` for an exa
 #include <string_view>
 #include <array>
 #include <utility>
-#include <fix8/f8fiber.hpp>
+#include <fix8/fiber.hpp>
 using namespace FIX8;
 
 int main()
@@ -582,7 +592,7 @@ int main()
 <p>
 
 ```bash
-$ ./f8fibertest12
+$ ./fibertest12
 "I for am thankful all who of those said me. no to It’s them because of I’m myself."
 doing it  - Albert Einstein
 "I am thankful for all of those who said no to me. It’s because of them I’m doing it myself."
@@ -594,7 +604,7 @@ $
 </details>
 
 ## 6. Example with `std::packaged_task` and `std::future`
-Using `std::packaged_task` we create a task, binding a lambda expression taking an int and returning an int. We then obtain a `std::future` from the task, and `std::move`
+Using `std::packaged_task` we create a task - a lambda expression taking an int and returning an int. We then obtain a `std::future` from the task, and `std::move`
 the task to a `fiber`. The fiber will call the task execute operator.
 
 The fiber and main switch control between each other until the fiber has completed. When it completes, it returns a value which the task makes available to the future.
@@ -606,19 +616,19 @@ This value is then obtained by the call to `myfuture.get()`.
 ```c++
 #include <functional>
 #include <future>
-#include <fix8/f8fiber.hpp>
+#include <fix8/fiber.hpp>
 using namespace FIX8;
 
 int main(void)
 {
-   std::packaged_task<int(int)> task(std::bind([](int arg)
+   std::packaged_task task([](int arg)
    {
       std::cout << "\tstarting sub\n";
       for (int ii{}; ii < arg; this_fiber::yield())
          std::cout << "\tsub: " << ++ii << '\n';
       std::cout << "\tleaving sub\n";
       return arg * 100;
-   }, std::placeholders::_1));
+   });
    auto myfuture { task.get_future() };
    fiber myfiber(std::move(task), 10);
    for (int ii{}; myfiber; this_fiber::yield())
@@ -635,7 +645,7 @@ int main(void)
 <p>
 
 ```bash
-$ ./f8fibertest3
+$ ./fibertest3
 main: 1
         starting sub
         sub: 1
@@ -683,7 +693,7 @@ The usual test for a running fiber is used to signal the exiting of the applicat
 ```c++
 #include <iostream>
 #include <string>
-#include <fix8/f8fiber.hpp>
+#include <fix8/fiber.hpp>
 using namespace FIX8;
 
 struct foo
@@ -731,7 +741,7 @@ int main()
 <p>
 
 ```bash
-$ ./f8fibertest8
+$ ./fibertest8
 main: 1
 foo(10,&_a=0x7f91323b9f8c)
         starting sub
@@ -775,7 +785,7 @@ $
 ## 8. Using `jfiber`
 A `jfiber` differs from a `fiber` in that it automatically joins on destruction, similar to C++20 `std::jthread`. This example demonstrates the difference between the two.
 With no command line arguments, the application will create a `jfiber` otherwise a normal `fiber` is created. With the normal fiber, `main` will exit before
-the fiber has completed. The default behaviour is the same as a `std::thread` that has not been joined - `abort`. But with the `jfiber`, when `main` exits, the jfiber
+the fiber has completed. The default behaviour is the same as a `std::thread` that has not been joined - `terminate`. But with the `jfiber`, when `main` exits, the jfiber
 will join, so that the fiber is resumed. When the fiber has finished, the application can end.
 
 <details><summary><i>source</i></summary>
@@ -784,7 +794,7 @@ will join, so that the fiber is resumed. When the fiber has finished, the applic
 ```c++
 #include <iostream>
 #include <functional>
-#include <fix8/f8fiber.hpp>
+#include <fix8/fiber.hpp>
 using namespace FIX8;
 using namespace std::literals;
 
@@ -815,7 +825,7 @@ int main(int argc, char *argv[])
 <p>
 
 ```bash
-$ ./f8fibertest25 1
+$ ./fibertest25 1
         starting fiber
 #      fid  pfid prev   ctxs      stack ptr    stack alloc     depth  stacksz     flags ord name
 0    * NaF  NaF  2544      2 0x7ffffe9423a8              0        0  8388608 m________  99 main
@@ -825,7 +835,7 @@ fiber has exited. Terminating application.
 terminate called without an active exception
 Aborted (core dumped)
 $
-$ ./f8fibertest25
+$ ./fibertest25
         starting jfiber
 #      fid  pfid prev   ctxs      stack ptr    stack alloc    depth  stacksz     flags ord name
 0    * NaF  NaF  5168      2 0x7ffe8e345e68              0        0  8388608 m________  99 main
@@ -865,7 +875,7 @@ When the main thread finishes, it does a thread join, and waits till the second 
 
 ```c++
 #include <thread>
-#include <fix8/f8fiber.hpp>
+#include <fix8/fiber.hpp>
 using namespace FIX8;
 using namespace std::chrono_literals;
 
@@ -940,7 +950,7 @@ int main(void)
 <p>
 
 ```bash
-$ ./f8fibertest24
+$ ./fibertest24
 main1 0
 main 0
         starting first
@@ -1065,7 +1075,7 @@ The sizes of various objects are printed at the end.
 ```c++
 #include <iostream>
 #include <functional>
-#include <fix8/f8fiber.hpp>
+#include <fix8/fiber.hpp>
 using namespace FIX8;
 using namespace std::literals;
 
@@ -1160,7 +1170,7 @@ int main(void)
 <p>
 
 ```
-$ ./f8fibertest
+$ ./fibertest
 #      fid  pfid prev   ctxs      stack ptr    stack alloc    depth  stacksz     flags ord name
 0    * NaF  NaF  NaF       1              0              0        0  8388608 m________  99 main
 1      9072 NaF  NaF       0 0x563f8b3a9690 0x563f8b3a8ee0       72     2048 _____n___  99
@@ -1332,7 +1342,7 @@ Note that the location of B is not deterministic.
 ```c++
 #include <cstdio>
 #include <thread>
-#include <fix8/f8fiber.hpp>
+#include <fix8/fiber.hpp>
 using namespace FIX8;
 
 int main()
@@ -1372,13 +1382,13 @@ int main()
 <p>
 
 ```bash
-$ ./f8fibertest7
+$ ./fibertest7
 XabababBabBBabBababBabBabBBabBaB
 $
-$ ./f8fibertest7
+$ ./fibertest7
 XabababBabBBabBabBabBababBabBaBB
 $
-$ ./f8fibertest7
+$ ./fibertest7
 XabababBabBBabBabBababBababBBBaB
 $
 ```

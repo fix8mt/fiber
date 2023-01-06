@@ -32,50 +32,33 @@
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
 #include <iostream>
-#include <functional>
-#include <deque>
-#include <set>
-#include <fix8/f8fiber.hpp>
+#include <random>
+#include <string>
+#include <fix8/fiber.hpp>
 
-// CC=gcc CXX="g++ -ggdb" CXXFLAGS=-O0 -DCMAKE_BUILD_TYPE=Debug cmake ..
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
-
-//-----------------------------------------------------------------------------------------
-class foo : public fiber
-{
-	int _arg;
-
-public:
-	foo(int arg) : fiber (&foo::sub, this), _arg(arg) {}
-
-	void sub()
-	{
-		std::cout << "\tstarting sub " << _arg << '\n';
-		for (int ii{}; ii < _arg; this_fiber::yield())
-			std::cout << '\t' << _arg << ": " << ++ii << '\n';
-		std::cout << "\tleaving sub " << _arg << '\n';
-	}
-};
+using namespace std::literals;
 
 //-----------------------------------------------------------------------------------------
 int main(void)
 {
-	try
+	static std::mt19937_64 rnde {std::random_device{}()};
+	std::cout << "Starting main\n";
+
+	for (int ii{}; ii < 1000; ++ii)
 	{
-		foo bar(10);
-		fibers::print();
-		while (fibers::has_fibers())
+		fiber([](int arg)
 		{
-			std::cout << "main\n";
-			this_fiber::yield();
-		}
-		fibers::print();
-		std::cout << "Exiting from main\n";
+			std::cout << "\tStarting " << this_fiber::name() << '\n';
+			for (int ii{}; ii < arg; this_fiber::yield())
+				std::cout << "\t\t" << this_fiber::name() << ": " << ++ii << ' '
+					<< std::uniform_int_distribution<int>{1, 1000000}(rnde) << '\n';
+			std::cout << "\tLeaving " << this_fiber::name() << '\n';
+		},
+		ii + 1).set_params(("sub"s + std::to_string(ii)).c_str(), ii).detach();
 	}
-	catch (const std::exception& e)
-	{
-		std::cerr << "\nException: " << e.what() << '\n';
-	}
+	fibers::print();
+	std::cout << "Exiting main\n";
 	return 0;
 }

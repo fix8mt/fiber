@@ -35,9 +35,8 @@
 #include <functional>
 #include <deque>
 #include <set>
-#include <fix8/f8fiber.hpp>
+#include <fix8/fiber.hpp>
 
-// CC=gcc CXX="g++ -ggdb" CXXFLAGS=-O0 -DCMAKE_BUILD_TYPE=Debug cmake ..
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
 using namespace std::literals;

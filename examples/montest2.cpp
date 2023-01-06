@@ -46,8 +46,8 @@
 #include <chrono>
 #include <thread>
 #include <random>
-#include <fix8/f8fiber.hpp>
-#include <fix8/f8fibermonitor.hpp>
+#include <fix8/fiber.hpp>
+#include <fix8/fibermonitor.hpp>
 #include <getopt.h>
 #include <gmpxx.h>
 

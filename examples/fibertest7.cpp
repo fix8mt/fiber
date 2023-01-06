@@ -31,63 +31,60 @@
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
-#include <iostream>
-#include <iomanip>
+#include <cstdio>
 #include <thread>
-#include <chrono>
-#include <queue>
-#include <random>
-#include <string>
-#include <fix8/f8fiber.hpp>
+#include <fix8/fiber.hpp>
 
-//-----------------------------------------------------------------------------------------
 using namespace FIX8;
 
 //-----------------------------------------------------------------------------------------
-class foo
-{
-	std::queue<long> _queue;
-	fiber _produce, _consume;
-
-public:
-   foo(int num) : _produce([this](int numtogen)
-	{
-		std::cout << "\tproducer:fiber entry (id:" << this_fiber::get_id() << ")\n";
-		std::mt19937_64 rnde {std::random_device{}()};
-		for (int cnt{}; cnt < numtogen; ++cnt)
-		{
-			while(_queue.size() < 5)
-				_queue.push(std::uniform_int_distribution<long>(1, std::numeric_limits<long>().max())(rnde));
-			std::cout << "\tproduced: " << _queue.size() << '\n';
-			_consume.resume(); // switch to consumer
-		}
-		_consume.schedule(); // consumer is next fiber to run
-		std::cout << "\tproducer:fiber exit\n";
-	}, num), _consume([this]()
-	{
-		std::cout << "\tconsumer:fiber entry (id:" << this_fiber::get_id() << ")\n";
-		while (_produce)
-		{
-			std::cout << "\tconsuming: " << _queue.size() << '\n';
-			while(!_queue.empty())
-			{
-				std::cout << "\t\t" << _queue.front() << '\n';
-				_queue.pop();
-			}
-			_produce.resume(); // switch to producer
-		}
-		std::cout << "\tconsumer:fiber exit\n";
-	})
-	{
-		_produce.resume(); // switch to producer
-	}
-};
-
+// from Dilawar's Blog
+// https://dilawar.github.io/posts/2021/2021-11-14-example-boost-fiber/
 //-----------------------------------------------------------------------------------------
-int main(int argc, char *argv[])
+int main()
 {
-   std::cout << "main:entry\n";
-   foo bar(argc > 1 ? std::stoi(argv[1]) : 10);
-   std::cout << "main:exit\n";
-   return 0;
+	static int ii{};
+
+	fiber([]()
+	{
+		do
+		{
+			std::printf("%c", 'a');
+			this_fiber::yield();
+		}
+		while (++ii < 20);
+	}).detach();
+
+	fiber([]()
+	{
+		do
+		{
+			std::printf("%c", 'b');
+			std::thread([]() { std::printf("%c", 'B'); }).detach();
+			this_fiber::yield();
+		}
+		while (++ii < 20);
+	}).detach();
+
+	std::printf("%c", 'X');
+	return 0;
 }
+
+// XabababBabBBabBababBabBabBBabBaB
+// XabababBabBBabBabBabBababBabBaBB
+// XabababBabBBabBabBababBababBBBaB
+// XabababBabBababBBBababBBabBabBaB
+// XabababBabBBabBababBabBabBabBBaB
+// XabababBabBBabBababBabBabBabBaBB
+// XabababBabBBababBabBabBBababBaBB
+// XabababBabBabBBabababBBBabBabaBB
+// XabababBBabBabababBBabBBababBaBB
+// XabababBabBabBabBBababBabBabBBaB
+// XabababBBababBabBabBabBBabBabaBB
+// XabababBabBabBBababababBBBabBBaB
+// XabababBabBBabBababBabBabBBabaBB
+// XabababBabBBabBababBabBabBBabBaB
+// XabababBabBBababBBababBBababBaBB
+// XababBabBababBababBBBabBababBaBB
+// XabababBabBBabBababBabBabBBabBaB
+// XabababBabBBababBabBabBBababBaBB

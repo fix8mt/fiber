@@ -39,7 +39,7 @@
 #include <random>
 #include <exception>
 
-#include <fix8/f8fiber.hpp>
+#include <fix8/fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;

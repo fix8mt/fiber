@@ -106,6 +106,14 @@ public:
 	bool operator! () const noexcept { return is_quit(); }
 	std::pair<int, int> get_dimensions() const noexcept { return _dimensions; }
 
+	static std::string sort_help() noexcept
+	{
+		std::ostringstream result;
+		for (int ii{}; const auto pp : _snames)
+			result << ++ii << ':' << pp << ' ';
+		return std::move(result.str());
+	}
+
 	void update_row(int row, int pos, bool iscurrent, const fiber_base& what) const
 	{
 		tb_printf(0, row, 0, iscurrent ? TB_BOLD|TB_RED : 0,

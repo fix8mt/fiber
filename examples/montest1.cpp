@@ -42,8 +42,8 @@
 #include <chrono>
 #include <thread>
 #include <random>
-#include <fix8/f8fiber.hpp>
-#include <fix8/f8fibermonitor.hpp>
+#include <fix8/fiber.hpp>
+#include <fix8/fibermonitor.hpp>
 #include <unistd.h>
 #ifdef _GNU_SOURCE
 #include <getopt.h>
@@ -59,7 +59,7 @@ class foo
 	std::mt19937_64 _rnde {std::random_device{}()};
 	std::uniform_int_distribution<int> _dist{1, 224};
 	fiber_monitor& _fm;
-	int _sleepval;
+	int _sleepval, _val;
 	window_frame _xyxy;
 
 public:
@@ -70,9 +70,8 @@ public:
 	{
 		while (arg--)
 		{
-			const int suz{arg * _dist(_rnde)};
-			double varr[suz]; // consume variable amt of stack
-			varr[suz - 1] = 0; // force optimizer to hands off
+			double varr[arg * _dist(_rnde)]; // consume variable amt of stack
+			_val = varr[_dist(_rnde)]; // force optimizer hands off
 
 			_fm.update(_xyxy);
 			if (!_fm)
@@ -137,7 +136,7 @@ int main(int argc, char *argv[])
   -i,--interval interval msecs (default 100)
   -f,--fibers fiber count (default )" << (fiber_monitor::get_terminal_dimensions().second - 4) << R"()
   -s,--sleep sleep msecs (default 50)
-  -m,--mode sort mode (default by_ms)
+  -m,--mode sort mode )" << fiber_monitor::sort_help() << R"((default 3)
   -o,--order no launch order
   -k,--noskip no skip main
   -r,--interval retain finished fibers

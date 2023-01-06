@@ -32,33 +32,62 @@
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
 #include <iostream>
+#include <iomanip>
+#include <thread>
+#include <chrono>
+#include <queue>
 #include <random>
 #include <string>
-#include <fix8/f8fiber.hpp>
+#include <fix8/fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
-using namespace std::literals;
 
 //-----------------------------------------------------------------------------------------
-int main(void)
+class foo
 {
-	std::cout << "Starting main\n";
-	std::mt19937_64 rnde {std::random_device{}()};
-	std::uniform_int_distribution<int> pgen {1, 1000000};
+	std::queue<long> _queue;
+	fiber _produce, _consume;
 
-	for (int ii{}; ii < 1000; ++ii)
+public:
+   foo(int num) : _produce([this](int numtogen)
 	{
-		fiber([&rnde,&pgen](int arg)
+		std::cout << "\tproducer:fiber entry (id:" << this_fiber::get_id() << ")\n";
+		std::mt19937_64 rnde {std::random_device{}()};
+		for (int cnt{}; cnt < numtogen; ++cnt)
 		{
-			std::cout << "\tStarting " << this_fiber::name() << '\n';
-			for (int ii{}; ii < arg; this_fiber::yield())
-				std::cout << "\t\t" << this_fiber::name() << ": " << ++ii << ' ' << pgen(rnde) << '\n';
-			std::cout << "\tLeaving " << this_fiber::name() << '\n';
-		},
-		ii + 1).set_params(("sub"s + std::to_string(ii)).c_str(), ii).detach();
+			while(_queue.size() < 5)
+				_queue.push(std::uniform_int_distribution<long>(1, std::numeric_limits<long>().max())(rnde));
+			std::cout << "\tproduced: " << _queue.size() << '\n';
+			_consume.resume(); // switch to consumer
+		}
+		_consume.schedule(); // consumer is next fiber to run
+		std::cout << "\tproducer:fiber exit\n";
+	}, num), _consume([this]()
+	{
+		std::cout << "\tconsumer:fiber entry (id:" << this_fiber::get_id() << ")\n";
+		while (_produce)
+		{
+			std::cout << "\tconsuming: " << _queue.size() << '\n';
+			while(!_queue.empty())
+			{
+				std::cout << "\t\t" << _queue.front() << '\n';
+				_queue.pop();
+			}
+			_produce.resume(); // switch to producer
+		}
+		std::cout << "\tconsumer:fiber exit\n";
+	})
+	{
+		_produce.resume(); // switch to producer
 	}
-	fibers::print();
-	std::cout << "Exiting main\n";
-	return 0;
+};
+
+//-----------------------------------------------------------------------------------------
+int main(int argc, char *argv[])
+{
+   std::cout << "main:entry\n";
+   foo bar(argc > 1 ? std::stoi(argv[1]) : 10);
+   std::cout << "main:exit\n";
+   return 0;
 }

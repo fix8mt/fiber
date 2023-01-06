@@ -32,29 +32,37 @@
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
 #include <iostream>
-#include <functional>
-#include <future>
-#define FIBER_NO_INSTRUMENTATION
-#include <fix8/f8fiber.hpp>
+#include <string_view>
+#include <array>
+#include <fix8/fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
 
 //-----------------------------------------------------------------------------------------
-int main(void)
+int main()
 {
-	std::packaged_task<int(int)> task(std::bind([](int arg)
+	std::thread([]()
 	{
-		std::cout << "\tstarting sub\n";
-		for (int ii{}; ii < arg; this_fiber::yield())
-			std::cout << "\tsub: " << ++ii << '\n';
-		std::cout << "\tleaving sub\n";
-		return arg * 100;
-	}, std::placeholders::_1));
-	auto myfuture { task.get_future() };
-	fiber myfiber(std::move(task), 10);
-	for (int ii{}; myfiber; this_fiber::yield())
-		std::cout << "main: " << ++ii << '\n';
-	std::cout << "Future result = " << myfuture.get() << "\nExiting from main\n";
+		static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
+		{{
+			{	R"("I )",		"all ",		"said ",	"It’s ",		"I’m ",			"\n – ",			},
+			{	"am ",			"of ",		"no ",	"because ",	"doing ",		"Albert ",		},
+			{	"thankful ",	"those ",	"to ",	"of ",		"it ",			"Einstein\n"	},
+			{	"for ",			"who ",		"me. ",	"them ",		R"(myself.")",						},
+		}};
+		for (const auto& pp : wordset)
+		{
+			fiber ([](const auto& words)
+			{
+				for (auto qq : words)
+				{
+					std::cout << qq;
+					this_fiber::yield();
+				}
+			}, pp).detach();
+		}
+	}).join();
+
 	return 0;
 }

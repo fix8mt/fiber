@@ -33,73 +33,28 @@
 //-----------------------------------------------------------------------------------------
 #include <iostream>
 #include <functional>
-#include <deque>
-#include <set>
 #include <future>
-#include <fix8/f8fiber.hpp>
+#define FIBER_NO_INSTRUMENTATION
+#include <fix8/fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
 
 //-----------------------------------------------------------------------------------------
-struct blah
-{
-	~blah() { std::cout << "~blah()\n"; }
-};
-
-struct foo
-{
-	void sub(int arg, std::promise<int>& pr)
-	{
-		blah b;
-		try
-		{
-			std::cout << "\tstarting " << arg << '\n';
-			for (int ii{}; ii < arg; )
-			{
-				std::cout << '\t' << arg << ": " << ++ii << '\n';
-				this_fiber::yield();
-			}
-			//pr.set_value(arg * 100);
-			std::cout << "\tleaving " << arg << '\n';
-			throw std::runtime_error("test exception");
-		}
-		catch (...)
-		{
-			try
-			{
-				pr.set_exception(std::current_exception());
-			}
-			catch(...)
-			{
-				std::cerr << "pr.set_exception(std::current_exception()) threw\n";
-			}
-		}
-	}
-	~foo() { std::cout << "~foo()\n"; }
-};
-
-//-----------------------------------------------------------------------------------------
 int main(void)
 {
-	foo bar;
-	std::promise<int> mypromise;
-	auto myfuture { mypromise.get_future() };
-	fiber sub_co(&foo::sub, &bar, 10, std::ref(mypromise));
-	for (int ii{}; sub_co; )
+	std::packaged_task task([](int arg)
 	{
+		std::cout << "\tstarting sub\n";
+		for (int ii{}; ii < arg; this_fiber::yield())
+			std::cout << "\tsub: " << ++ii << '\n';
+		std::cout << "\tleaving sub\n";
+		return arg * 100;
+	});
+	auto myfuture { task.get_future() };
+	fiber myfiber(std::move(task), 10);
+	for (int ii{}; myfiber; this_fiber::yield())
 		std::cout << "main: " << ++ii << '\n';
-		this_fiber::yield();
-	}
-	try
-	{
-		std::cout << "Future result = " << myfuture.get() << '\n';
-		sub_co.join_if();
-	}
-	catch (const std::exception& e)
-	{
-		std::cerr << "\nException: " << e.what() << '\n';
-	}
-	std::cout << "Exiting from main\n";
+	std::cout << "Future result = " << myfuture.get() << "\nExiting from main\n";
 	return 0;
 }

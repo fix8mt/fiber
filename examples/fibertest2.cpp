@@ -32,55 +32,47 @@
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
 #include <iostream>
-#include <string_view>
-#include <array>
-#include <utility>
-#include <fix8/f8fiber.hpp>
+#include <functional>
+#include <deque>
+#include <set>
+#include <future>
+#include <fix8/fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
 
 //-----------------------------------------------------------------------------------------
-int main()
+int main(void)
 {
-	static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
-	{{
-		{	R"("I )",		"all ",		"said ",		"It’s ",		"I’m ",								},
-		{	"for ",			"who ",		"me. ",		"them ",		"myself.\"\n"						},
-		{	"am ",			"of ",		"no ",		"because ",	"doing ",		" - Albert ",	},
-		{	"thankful ",	"those ",	"to ",		"of ",		"it ",			"Einstein\n"	},
-	}};
-
-	static const auto func([](const auto& words)
+	try
 	{
-		for (auto pp : words)
+		std::promise<int> mypromise;
+		auto myfuture { mypromise.get_future() };
+		fiber sub_co([](int arg, std::promise<int>& pr)
 		{
-			std::cout << pp;
+			std::cout << "\tstarting " << arg << '\n';
+			for (int ii{}; ii < arg; )
+			{
+				std::cout << '\t' << arg << ": " << ++ii << '\n';
+				this_fiber::yield();
+			}
+			pr.set_value(arg * 100);
+			std::cout << "\tleaving " << arg << '\n';
+		}, 10, std::ref(mypromise));
+
+		for (int ii{}; sub_co; )
+		{
+			std::cout << "main: " << ++ii << '\n';
 			this_fiber::yield();
 		}
-	});
-
-	std::thread([]()
+		std::cout << "Exiting from main\n";
+		std::cout << "Future result = " << myfuture.get() << '\n';
+		//if (myfuture.valid())
+		std::cout << "Repeated result (should throw exception) = " << myfuture.get() << '\n';
+	}
+	catch (const std::future_error& e)
 	{
-		launch_all // will print in fiber work order
-		(
-			std::bind(func, wordset[0]),
-			std::bind(func, wordset[1]),
-			std::bind(func, wordset[2]),
-			std::bind(func, wordset[3])
-		);
-	}).join();
-
-	std::thread([]()
-	{
-		launch_all_with_params // will print in specified order
-		(
-			fiber_params{.launch_order=0}, std::bind(func, wordset[0]),
-			fiber_params{.launch_order=3}, std::bind(func, wordset[1]),
-			fiber_params{.launch_order=1}, std::bind(func, wordset[2]),
-			fiber_params{.launch_order=2}, std::bind(func, wordset[3])
-		);
-	}).join();
-
+		std::cerr << "Exception: " << e.what() << '(' << e.code() << ")\n";
+	}
 	return 0;
 }

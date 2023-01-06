@@ -32,100 +32,66 @@
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
 #include <iostream>
-#include <functional>
 #include <string_view>
+#include <functional>
 #include <deque>
 #include <set>
-#include <thread>
-#include <fix8/f8fiber.hpp>
+#include <fix8/fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
-using namespace std::chrono_literals;
+using namespace std::literals;
 
 //-----------------------------------------------------------------------------------------
-void sub(int arg)
+struct blah { ~blah() { std::cout << "~blah(): " << this_fiber::name() << '\n'; } };
+
+void doit(int arg, std::string_view spacer)
 {
-	std::cout << "\tstarting " << this_fiber::name() << ' ' << arg << '\n';
+	blah b;
+	std::cout << spacer << "starting " << this_fiber::name() << ' ' << arg << '\n';
 	for (int ii{}; ii < arg; this_fiber::yield())
+		std::cout << spacer << this_fiber::name() << ' ' << arg << ": " << ++ii << '\n';
+	std::cout << spacer << "leaving " << this_fiber::name() << ' ' << arg << '\n';
+}
+
+void doit_with_stoprequest(std::string_view spacer, bool& stop_requested)
+{
+	blah b;
+	std::cout << spacer << "starting " << this_fiber::name() << '\n';
+	for(int ii{};; this_fiber::yield())
 	{
-		std::cout << '\t' << std::this_thread::get_id() << ' ' << this_fiber::name() << ' ' << arg << ": " << ++ii << '\n';
-		std::this_thread::sleep_for(1s);
+		std::cout << spacer << this_fiber::name() << ": " << ++ii << '\n';
+		if (stop_requested)
+		{
+			std::cout << spacer << this_fiber::name() << ": stop requested\n";
+			break;
+		}
 	}
-	std::cout << "\tleaving " << this_fiber::name() << ' ' << arg << '\n';
+	std::cout << spacer << "leaving " << this_fiber::name() << '\n';
 }
 
 //-----------------------------------------------------------------------------------------
-int main(int argc, char *argv[])
+int main(void)
 {
-	int stcnt{20};
-	try
+	fiber sub_co({.name="sub0"}, &doit, 9, "\t"), sub_co1({.name="sub1"}, [](int arg, std::string_view spacer)
 	{
-		if (argc > 1)
-			stcnt = std::stoi(argv[1]);
-	}
-	catch (const std::exception& e)
+		blah b;
+		bool stop_requested{};
+		std::cout << spacer << "starting " << this_fiber::name() << ' ' << arg << '\n';
+		fiber sub_co2({.name="sub1/sub",.join=true}, &doit_with_stoprequest, "\t\t", std::ref(stop_requested));
+		for (int ii{}; ii < arg; this_fiber::yield())
+			std::cout << spacer << this_fiber::name() << ' ' << arg << ": " << ++ii << '\n';
+		stop_requested = true;
+		std::cout << spacer << "leaving " << this_fiber::name() << ' ' << arg << '\n';
+	}, 10, "\t");
+	fibers::print();
+	for (int ii{}; fibers::has_fibers(); ++ii)
 	{
-		std::cerr << "exception: " << e.what() << std::endl;
-		exit(1);
-	}
-
-	fiber f0({.name="first"}, &sub, 15), f1({.name="second"}, &sub, 12), f2({.name="third"}, &sub, 13);
-	std::thread t1([stcnt]()
-	{
-		fiber ft1({.name="tfirst"}, &sub, stcnt);
-		for (int ii{}; fibers::has_fibers(); ++ii)
-		{
-			std::cout << "main1 " << ii << '\n';
-			switch(ii)
-			{
-			case 4:
-			case 9:
-			case 11:
-			case 21:
-				fibers::print();
-				break;
-			default:
-				break;
-			}
-			std::cout << "main1\n";
-			this_fiber::yield();
-		}
-		std::cout << "Exiting from main1\n";
-	});
-	std::this_thread::sleep_for(250ms);
-	try
-	{
-		for (int ii{}; fibers::has_fibers(); ++ii)
-		{
-			std::cout << "main " << ii << '\n';
-			switch(ii)
-			{
-			case 5:
-				std::cout << "transferring " << f0.get_id() << " from " << std::this_thread::get_id() << " to " << t1.get_id() << '\n';
-				f0.move(t1.get_id());
-				break;
-			case 10:
-				std::cout << "transferring " << f1.get_id() << " from " << std::this_thread::get_id() << " to " << t1.get_id() << '\n';
-				f1.move(t1.get_id());
-				break;
-			case 4:
-			case 9:
-			case 11:
-				fibers::print();
-				[[fallthrough]];
-			default:
-				this_fiber::yield();
-				break;
-			}
-		}
-	}
-	catch (std::exception& e)
-	{
-		std::cerr << "exception " << e.what() << '\n';
-		std::cerr << "killed " << fibers::kill_all() << " fibers\n";
+		std::cout << "main: " << std::dec << ii << '\n';
+		this_fiber::yield();
+		if (ii == 1)
+			fibers::print();
 	}
 	std::cout << "Exiting from main\n";
-	t1.join();
 	return 0;
 }

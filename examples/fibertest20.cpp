@@ -32,58 +32,83 @@
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
 #include <iostream>
-#include <string_view>
-#include <array>
-#include <list>
-#include <utility>
-#include <fix8/f8fiber.hpp>
+#include <functional>
+#include <deque>
+#include <set>
+#include <thread>
+#include <fix8/fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
+using namespace std::chrono_literals;
 
 //-----------------------------------------------------------------------------------------
-int main()
-{
-	static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
-	{{
-		{	R"("I )",		"all ",		"said ",		"It’s ",		"I’m ",								},
-		{	"for ",			"who ",		"me. ",		"them ",		"myself.\"\n"						},
-		{	"am ",			"of ",		"no ",		"because ",	"doing ",		" - Albert ",	},
-		{	"thankful ",	"those ",	"to ",		"of ",		"it ",			"Einstein\n"	},
-	}};
+std::thread::id id0;
 
-	const auto func([](const auto& words)
+//-----------------------------------------------------------------------------------------
+void sub(int arg)
+{
+	id0 = std::this_thread::get_id();
+
+	std::cout << "\tstarting sub " << arg << '\n';
+	for (int ii{}; ii < arg; this_fiber::yield())
 	{
-		for (auto pp : words)
+		std::cout << "\tsub " << std::this_thread::get_id() << ' ' << arg << ": " << ++ii << '\n';
+		std::this_thread::sleep_for(500ms);
+	}
+	std::cout << "\tleaving sub " << arg << '\n';
+}
+
+void sub1(int arg)
+{
+	std::cout << "\tstarting sub1 " << arg << '\n';
+	for (int ii{}; ii < arg; this_fiber::yield())
+	{
+		std::cout << "\tsub1 " << std::this_thread::get_id() << ' ' << arg << ": " << ++ii << '\n';
+		if (ii == 5)
 		{
-			std::cout << pp;
+			std::cout << "\ntransferring from " << std::this_thread::get_id() << " to " << id0 << '\n';
+			this_fiber::move(id0);
+		}
+		std::this_thread::sleep_for(500ms);
+	}
+	std::cout << "\tleaving sub1 " << arg << '\n';
+}
+
+void sub2(int arg)
+{
+	std::cout << "\tstarting sub2 " << arg << '\n';
+	for (int ii{}; ii < arg; this_fiber::yield())
+	{
+		std::cout << "\tsub2 " << std::this_thread::get_id() << ' ' << arg << ": " << ++ii << '\n';
+		std::this_thread::sleep_for(500ms);
+	}
+	std::cout << "\tleaving sub2 " << arg << '\n';
+}
+
+//-----------------------------------------------------------------------------------------
+int main(void)
+{
+	fiber f0({.name="first"},&sub, 15);
+	std::thread t1([]()
+	{
+		fiber f1({.name="second"},&sub1, 12), f2({.name="third"},&sub2, 13);
+		while (fibers::has_fibers())
+		{
+			std::cout << "main1\n";
+			//fibers::print();
 			this_fiber::yield();
 		}
+		std::cout << "Exiting from main1\n";
 	});
-
-	std::list<fiber> sts;
-
-	launch_all_n
-	(
-	 	sts,
-		std::bind(func, wordset[0]),
-		std::bind(func, wordset[1]),
-		std::bind(func, wordset[2]),
-		std::bind(func, wordset[3])
-	);
-	fibers::wait_all();
-
-	sts.clear();
-	fibers::set_flag(global_fiber_flags::skipmain);
-
-	launch_all_with_params_n
-	(
-	 	sts,
-		fiber_params{.launch_order=0}, std::bind(func, wordset[0]),
-		fiber_params{.launch_order=3}, std::bind(func, wordset[1]),
-		fiber_params{.launch_order=1}, std::bind(func, wordset[2]),
-		fiber_params{.launch_order=2}, std::bind(func, wordset[3])
-	);
-
+	std::this_thread::sleep_for(100ms);
+	while (fibers::has_fibers())
+	{
+		std::cout << "main\n";
+		//fibers::print();
+		this_fiber::yield();
+	}
+	std::cout << "Exiting from main\n";
+	t1.join();
 	return 0;
 }

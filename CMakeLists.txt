@@ -39,7 +39,7 @@ project (f8fiber VERSION 2.0)
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
 set(exdir ${CMAKE_SOURCE_DIR}/examples)
-file(GLOB esrc CONFIGURE_DEPENDS "${exdir}/f8*.cpp")
+file(GLOB esrc CONFIGURE_DEPENDS "${exdir}/fiber*.cpp")
 foreach(x ${esrc})
 	get_filename_component(fn ${x} NAME_WLE)
 	add_executable(${fn} ${x})

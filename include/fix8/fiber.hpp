@@ -321,15 +321,15 @@ public:
 //-----------------------------------------------------------------------------------------
 template<typename T, typename... Args>
 requires std::derived_from<T, f8_stack>
-constexpr f8_stack_ptr make_stack(Args&&... args)
+f8_stack_ptr make_stack(Args&&... args)
 {
-	return std::make_unique<T>(std::forward<Args>(args)...);
+	return f8_stack_ptr(new T(std::forward<Args>(args)...));
 }
 
 enum class stack_type { heap, mapped, placement };
 
 template<stack_type type, typename... Args>
-constexpr f8_stack_ptr make_stack(Args&&... args)
+f8_stack_ptr make_stack(Args&&... args)
 {
 	using enum stack_type;
 	if constexpr (type == heap)
@@ -408,7 +408,8 @@ class alignas(16) fiber_base
 		*--_stk = reinterpret_cast<uintptr_t>(trampoline<callable_wrapper<Fn>>);
 		*--_stk = reinterpret_cast<uintptr_t>(new (reinterpret_cast<char*>(_stk_alloc) + sizeof(fiber_base))
 			callable_wrapper(std::forward<Fn>(func))); // store at bottom of stack
-		std::fill(_stk -= 6, _stk, 0x0);
+		std::fill(_stk - 6, _stk, 0x0);
+		_stk -= 6;
 		*--_stk = getfpumxflags(); // preserve fpu/sse flags
 	}
 
@@ -1292,14 +1293,14 @@ constexpr void launch_all_with_params_n(C& c, Ps&& params, Fn&& func, Fns&& ...f
 
 template<typename T=fiber, typename... Args>
 requires std::derived_from<T, fiber>
-constexpr fiber_ptr make_fiber(Args&&... args)
+fiber_ptr make_fiber(Args&&... args)
 {
 	return fiber_ptr(new T(std::forward<Args>(args)...));
 }
 
 template<typename T=fiber, typename... Args>
 requires std::derived_from<T, fiber>
-constexpr fiber_ptr make_fiber(fiber_params&& params, Args&&... args)
+fiber_ptr make_fiber(fiber_params&& params, Args&&... args)
 {
 	return fiber_ptr(new T(std::forward<fiber_params>(params), std::forward<Args>(args)...));
 }

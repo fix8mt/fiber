@@ -32,46 +32,49 @@
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
 #include <iostream>
-#include <string_view>
-#include <array>
-#include <fix8/f8fiber.hpp>
+#include <functional>
+#include <deque>
+#include <set>
+#include <fix8/fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
 
 //-----------------------------------------------------------------------------------------
-int main()
+class foo : public fiber
 {
-	auto func([](const auto& words)
+	int _arg;
+
+public:
+	foo(int arg) : fiber (&foo::sub, this), _arg(arg) {}
+
+	void sub()
 	{
-		for (auto pp : words)
+		std::cout << "\tstarting sub " << _arg << '\n';
+		for (int ii{}; ii < _arg; this_fiber::yield())
+			std::cout << '\t' << _arg << ": " << ++ii << '\n';
+		std::cout << "\tleaving sub " << _arg << '\n';
+	}
+};
+
+//-----------------------------------------------------------------------------------------
+int main(void)
+{
+	try
+	{
+		foo bar(10);
+		fibers::print();
+		while (fibers::has_fibers())
 		{
-			std::cout << pp << ' ';
+			std::cout << "main\n";
 			this_fiber::yield();
 		}
-	});
-
-	static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
-	{{
-		{	R"("I)",		"all",	"said",	"It’s",		"I’m",		"\n  –",			},
-		{	"thankful",	"those",	"to",		"of",			"it",			"Einstein\n"	},
-		{	"for",		"who",	"me.",	"them",		"myself\".",					},
-		{	"am",			"of",		"no",		"because",	"doing",		"Albert",		},
-	}};
-	std::array work
+		fibers::print();
+		std::cout << "Exiting from main\n";
+	}
+	catch (const std::exception& e)
 	{
-		fiber{ {.launch_order=0,.name="first"},	func, wordset[0] },
-		fiber{ {.launch_order=2,.name="second"},	func, wordset[1] },
-		fiber{ {.launch_order=3,.name="third"},	func, wordset[2] },
-		fiber{ {.launch_order=1,.name="fourth"},	func, wordset[3] }
-	};
-
-	fibers::print();
-	std::cout << std::endl;
-
-	fibers::set_flag(global_fiber_flags::skipmain);
-	//while(fibers::has_fibers())
-		this_fiber::yield();
-
+		std::cerr << "\nException: " << e.what() << '\n';
+	}
 	return 0;
 }

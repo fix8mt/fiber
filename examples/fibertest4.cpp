@@ -33,28 +33,28 @@
 //-----------------------------------------------------------------------------------------
 #include <iostream>
 #include <functional>
-#include <fix8/f8fiber.hpp>
+#include <future>
+#include <fix8/fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
-using namespace std::literals;
 
 //-----------------------------------------------------------------------------------------
-void doit()
+int sub(int arg)
 {
-	std::cout << "\tstarting " << this_fiber::name() << '\n';
-	this_fiber::yield();
-	for(int ii{}; ii < 10; std::this_thread::sleep_for(100ms))
-		std::cout << '\t' << this_fiber::name() << ": " << ++ii << '\n';
-	std::cout << "\tleaving " << this_fiber::name() << '\n';
+	fibers::print();
+	std::cout << "\tstarting " << arg << '\n';
+	for (int ii{}; ii < arg; )
+		std::cout << '\t' << arg << ": " << ++ii << '\n';
+	std::cout << "\tleaving " << arg << '\n';
+	return arg * 100;
 }
 
 //-----------------------------------------------------------------------------------------
-int main(int argc, char *argv[])
+int main(void)
 {
-	std::unique_ptr<fiber> fb { argc > 1 ? new fiber({.name="fiber"}, &doit)
-													 : new jfiber({.name="jfiber"}, &doit) };
-	this_fiber::yield();
+	std::future<int> myfuture { async(&sub, 10) };
+	std::cout << "Future result = " << myfuture.get() << '\n';
 	fibers::print();
 	std::cout << "Exiting from main\n";
 	return 0;

@@ -36,7 +36,7 @@
 #include <random>
 #include <list>
 #include <string>
-#include <fix8/f8fiber.hpp>
+#include <fix8/fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
@@ -45,32 +45,29 @@ using namespace std::literals;
 //-----------------------------------------------------------------------------------------
 int main(void)
 {
+	static std::mt19937_64 rnde {std::random_device{}()}; // this one needs to be static
 	std::cout << "Starting main\n";
 	std::list<std::future<int>> flist;
 
-	std::thread([&flist]()
+	std::thread ([&flist]()
 	{
-		std::mt19937_64 rnde {std::random_device{}()};
-		std::uniform_int_distribution<int> pgen {1, 1000000};
-
-		for (int ii{1}; ii <= 10; ++ii)
+		for (int ii{1}; ii <= 5; ++ii)
 		{
-			std::packaged_task<int(int)> task([&rnde,&pgen](int arg)
+			std::packaged_task task([](int arg)
 			{
-				std::cout << "\tStarting " << this_fiber::name() << '\n';
+				std::cout << "\tStarting " << this_fiber::name(std::string(this_fiber::name() + std::to_string(arg)).c_str()) << '\n';
 				int result{};
-				for (int ii{1}; ii <= arg; this_fiber::yield())
+				for (int ii{}; ii < arg; this_fiber::yield())
 				{
-					result += pgen(rnde);
-					std::cout << "\t\t" << this_fiber::name() << ": " << ii++ << ' ' << result << '\n';
+					result += std::uniform_int_distribution<int>{1, 1000000}(rnde);
+					std::cout << "\t\t" << this_fiber::name() << ": " << ++ii << ' ' << result << '\n';
 				}
 				std::cout << "\tLeaving " << this_fiber::name() << '\n';
 				return result;
 			});
 			flist.emplace_back(task.get_future());
-			fiber({.launch_order=ii,.stacksz=16384}, std::move(task), ii).set_params(("sub"s + std::to_string(ii)).c_str()).detach();
+			fiber({.launch_order=ii,.name="sub"}, std::move(task), ii).detach();
 		}
-		fibers::print();
 	}).join();
 
 	int result{}, kk{};

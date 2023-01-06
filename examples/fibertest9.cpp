@@ -32,41 +32,46 @@
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
 #include <iostream>
-#include <iomanip>
-#include <thread>
+#include <functional>
+#include <deque>
+#include <set>
+#include <future>
 #include <string>
-#include <fix8/f8fiber.hpp>
+#include <fix8/fiber.hpp>
 
+//-----------------------------------------------------------------------------------------
 using namespace FIX8;
+using namespace std::literals;
 
-void func (bool& flags, int cnt)
+//-----------------------------------------------------------------------------------------
+struct foo : fiber
 {
-	std::cout << "\tfunc:entry (fiber id:" << this_fiber::get_id() << ")\n";
-	for (int kk{}; kk < cnt; ++kk)
+	foo(const char *str) : fiber(&foo::sub, this) { set_params(str); }
+
+	void sub()
 	{
-		std::cout << "\tfunc:" << kk << '\n';
-		this_fiber::yield();
-		std::cout << "\tfunc:" << kk << " (resumed)\n";
+		std::cout << "\tstarting " << this_fiber::name() << '\n';
+		for (int ii{}; ii < 5; )
+		{
+			std::cout << '\t' << this_fiber::name() << ": " << std::dec << ++ii << '\n';
+			this_fiber::yield();
+		}
+		fibers::print();
+		std::cout << "\tleaving " << this_fiber::name() << '\n';
 	}
-	flags = true;
-	fibers::print();
-	std::cout << "\tfunc:exit\n";
-}
+};
 
-int main(int argc, char *argv[])
+//-----------------------------------------------------------------------------------------
+int main(void)
 {
-   std::cout << "main:entry\n";
-   bool flags{};
-   fiber f0({.name="func"}, &func, std::ref(flags), 5);
-   std::cout << "flags=" << std::boolalpha << flags << '\n';
-
-   for (int ii{}; f0; ++ii)
-   {
-      std::cout << "main:" << ii << '\n';
-      this_fiber::yield();
-      std::cout << "main:" << ii << " (resumed)\n";
-   }
-   std::cout << "flags=" << std::boolalpha << flags << '\n';
-   std::cout << "main:exit\n";
-   return 0;
+	foo sub_co("sub_co"), sub_co1("sub_co1"), sub_co2("sub_co2");
+	for (int ii{}; fibers::has_fibers(); )
+	{
+		std::cout << "main: " << std::dec << ++ii << '\n';
+		sub_co.resume_if();
+		this_fiber::yield();
+	}
+	std::cout << "Exiting from main\n";
+	fibers::print();
+	return 0;
 }

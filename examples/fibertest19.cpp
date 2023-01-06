@@ -32,65 +32,49 @@
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
 #include <iostream>
-#include <string_view>
 #include <functional>
 #include <deque>
-#include <set>
-#include <fix8/f8fiber.hpp>
+#include <array>
+#include <fix8/fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
-using namespace std::literals;
 
 //-----------------------------------------------------------------------------------------
-struct blah { ~blah() { std::cout << "~blah(): " << this_fiber::name() << '\n'; } };
-
-void doit(int arg, std::string_view spacer)
+void func(int arg)
 {
-	blah b;
-	std::cout << spacer << "starting " << this_fiber::name() << ' ' << arg << '\n';
+	const std::string tag { std::string(this_fiber::name()) + ' ' + std::to_string(arg) };
+	std::cout << "\tstarting " << tag << '\n';
 	for (int ii{}; ii < arg; this_fiber::yield())
-		std::cout << spacer << this_fiber::name() << ' ' << arg << ": " << ++ii << '\n';
-	std::cout << spacer << "leaving " << this_fiber::name() << ' ' << arg << '\n';
-}
-
-void doit_with_stoprequest(std::string_view spacer, bool& stop_requested)
-{
-	blah b;
-	std::cout << spacer << "starting " << this_fiber::name() << '\n';
-	for(int ii{};; this_fiber::yield())
-	{
-		std::cout << spacer << this_fiber::name() << ": " << ++ii << '\n';
-		if (stop_requested)
-		{
-			std::cout << spacer << this_fiber::name() << ": stop requested\n";
-			break;
-		}
-	}
-	std::cout << spacer << "leaving " << this_fiber::name() << '\n';
+		std::cout << "\t\t" << tag << ": " << ++ii << '\n';
+	std::cout << "\tleaving " << tag << '\n';
+	fibers::print();
 }
 
 //-----------------------------------------------------------------------------------------
 int main(void)
 {
-	fiber sub_co({.name="sub0"}, &doit, 9, "\t"), sub_co1({.name="sub1"}, [](int arg, std::string_view spacer)
-	{
-		blah b;
-		bool stop_requested{};
-		std::cout << spacer << "starting " << this_fiber::name() << ' ' << arg << '\n';
-		fiber sub_co2({.name="sub1/sub",.join=true}, &doit_with_stoprequest, "\t\t", std::ref(stop_requested));
-		for (int ii{}; ii < arg; this_fiber::yield())
-			std::cout << spacer << this_fiber::name() << ' ' << arg << ": " << ++ii << '\n';
-		stop_requested = true;
-		std::cout << spacer << "leaving " << this_fiber::name() << ' ' << arg << '\n';
-	}, 10, "\t");
+	auto stack_memory { std::make_unique<char[]>(32768) };
+	std::array<fiber, 12> fbs
+	{{
+		{ {.name="sub01",.stacksz=8192}, &func, 3 },
+		{ {.name="sub02",.stacksz=8192}, &func, 6 },
+		{ {.name="sub03",.stacksz=8192}, &func, 9 },
+		{ {.name="sub04",.stacksz=8192}, &func, 12 },
+		{ {.name="sub05",.stacksz=8192,.stack=make_stack<stack_type::placement>(stack_memory.get())}, &func, 3 },
+		{ {.name="sub06",.stacksz=8192,.stack=make_stack<stack_type::placement>(stack_memory.get(), 8192)}, &func, 6 },
+		{ {.name="sub07",.stacksz=8192,.stack=make_stack<stack_type::placement>(stack_memory.get(), 2 * 8192)}, &func, 9 },
+		{ {.name="sub08",.stacksz=8192,.stack=make_stack<stack_type::placement>(stack_memory.get(), 3 * 8192)}, &func, 12 },
+		{ {.name="sub09",.stacksz=8192,.stack=make_stack<stack_type::mapped>()}, &func, 3 },
+		{ {.name="sub10",.stacksz=8192,.stack=make_stack<stack_type::mapped>()}, &func, 6 },
+		{ {.name="sub11",.stacksz=8192,.stack=make_stack<stack_type::mapped>()}, &func, 9 },
+		{ {.name="sub12",.stacksz=8192,.stack=make_stack<stack_type::mapped>()}, &func, 12 }
+	}};
 	fibers::print();
 	for (int ii{}; fibers::has_fibers(); ++ii)
 	{
 		std::cout << "main: " << std::dec << ii << '\n';
 		this_fiber::yield();
-		if (ii == 1)
-			fibers::print();
 	}
 	std::cout << "Exiting from main\n";
 	return 0;

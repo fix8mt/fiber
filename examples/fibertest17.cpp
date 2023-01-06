@@ -32,45 +32,38 @@
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
 #include <iostream>
-#include <thread>
-#define FIBER_NO_MULTITHREADING
-#include <fix8/f8fiber.hpp>
+#include <functional>
+#include <deque>
+#include <set>
+#include <future>
+#include <list>
+#include <random>
+#include <string>
+#include <fix8/fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
+using namespace std::literals;
 
-void print_a()
+//-----------------------------------------------------------------------------------------
+int main(void)
 {
-	std::cout << 'a';
-	this_fiber::yield();
-}
+	std::cout << "Starting main\n";
+	std::mt19937_64 rnde {std::random_device{}()};
+	std::uniform_int_distribution<int> agen {1, 1000}, pgen {1, 1000000};
 
-void print_b()
-{
-	std::cout << 'b';
-	std::thread([]() { std::cout << 'N'; }).detach();
-	this_fiber::yield();
-}
-
-int test()
-{
-	fiber([]()
+	for (int ii{}; ii < 10; ++ii)
 	{
-		int ii{};
-		do print_a(); while (ii++ < 1000);
-	}).detach();
-
-	fiber([]()
-	{
-		int ii{};
-		do print_b(); while (ii++ < 1000);
-	}).detach();
-	return 0;
-}
-
-int main()
-{
-	test();
-	std::cout << "xxxx";
+		fiber([&rnde,&pgen](int arg)
+		{
+			std::cout << "\tStarting " << this_fiber::name() << ' ' << arg << '\n';
+			for (int ii{}; ii < arg; this_fiber::yield())
+				std::cout << "\t\t" << this_fiber::name() << ": " << ++ii << ' ' << pgen(rnde) << '\n';
+			std::cout << "\tLeaving " << this_fiber::name() << '\n';
+		},
+		agen(rnde)).set_params(("sub"s + std::to_string(ii)).c_str(), ii).detach();
+	}
+	fibers::print();
+	std::cout << "Exiting main\n";
 	return 0;
 }

@@ -32,30 +32,46 @@
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
 #include <iostream>
-#include <functional>
-#include <future>
-#include <fix8/f8fiber.hpp>
+#include <string_view>
+#include <array>
+#include <fix8/fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
 
 //-----------------------------------------------------------------------------------------
-int sub(int arg)
+int main()
 {
-	fibers::print();
-	std::cout << "\tstarting " << arg << '\n';
-	for (int ii{}; ii < arg; )
-		std::cout << '\t' << arg << ": " << ++ii << '\n';
-	std::cout << "\tleaving " << arg << '\n';
-	return arg * 100;
-}
+	auto func([](const auto& words)
+	{
+		for (auto pp : words)
+		{
+			std::cout << pp << ' ';
+			this_fiber::yield();
+		}
+	});
 
-//-----------------------------------------------------------------------------------------
-int main(void)
-{
-	std::future<int> myfuture { async(&sub, 10) };
-	std::cout << "Future result = " << myfuture.get() << '\n';
+	static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
+	{{
+		{	R"("I)",		"all",	"said",	"It’s",		"I’m",		"\n  –",			},
+		{	"thankful",	"those",	"to",		"of",			"it",			"Einstein\n"	},
+		{	"for",		"who",	"me.",	"them",		"myself\".",					},
+		{	"am",			"of",		"no",		"because",	"doing",		"Albert",		},
+	}};
+	std::array work
+	{
+		fiber{ {.launch_order=0,.name="first"},	func, wordset[0] },
+		fiber{ {.launch_order=2,.name="second"},	func, wordset[1] },
+		fiber{ {.launch_order=3,.name="third"},	func, wordset[2] },
+		fiber{ {.launch_order=1,.name="fourth"},	func, wordset[3] }
+	};
+
 	fibers::print();
-	std::cout << "Exiting from main\n";
+	std::cout << std::endl;
+
+	fibers::set_flag(global_fiber_flags::skipmain);
+	//while(fibers::has_fibers())
+		this_fiber::yield();
+
 	return 0;
 }
