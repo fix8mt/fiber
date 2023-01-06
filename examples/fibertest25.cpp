@@ -52,8 +52,7 @@ void doit()
 //-----------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
-	std::unique_ptr<fiber> fb { argc > 1 ? new fiber({.name="fiber"}, &doit)
-													 : new jfiber({.name="jfiber"}, &doit) };
+	auto fb { argc > 1 ? make_fiber({.name="fiber"}, &doit) : make_fiber<jfiber>({.name="jfiber"}, &doit) };
 	this_fiber::yield();
 	fibers::print();
 	std::cout << "Exiting from main\n";

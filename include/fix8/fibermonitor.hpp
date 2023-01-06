@@ -72,7 +72,7 @@ public:
 	static xy_coord get_terminal_dimensions()
 	{
 		struct winsize w;
-		return ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == 0 ? xy_coord{ w.ws_col, w.ws_row } : xy_coord{};
+		return ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == 0 ? xy_coord{ w.ws_col, w.ws_row } : xy_coord{-1, -1};
 	}
 
 private:

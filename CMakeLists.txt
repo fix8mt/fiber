@@ -30,6 +30,9 @@
 # FOR ANY DAMAGES OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT OR OTHERWISE,
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
+#
+# CXX="clang++ -ggdb" CC="clang -ggdb" cmake  ..
+# CXX="g++ -ggdb" CC="gcc -ggdb" cmake  ..
 # ----------------------------------------------------------------------------------------
 cmake_minimum_required (VERSION 3.8)
 enable_language(CXX)
@@ -44,7 +47,6 @@ foreach(x ${esrc})
 	get_filename_component(fn ${x} NAME_WLE)
 	add_executable(${fn} ${x})
 endforeach()
-
 
 # to disable building monitor tests:
 # cmake -DBUILD_MONITOR=false ..

@@ -136,7 +136,7 @@ public:
 	constexpr auto operator<=>(const fiber_id& other) const noexcept { return _ptr <=> other._ptr; }
 
 #if defined FIX8_FIBER_INSTRUMENTATION_
-	template<typename charT, class traitsT>
+	template<typename charT, class traitsT> // TODO replace with std::format
 	friend std::basic_ostream<charT, traitsT>& operator<<(std::basic_ostream<charT, traitsT>& os, const fiber_id& what)
 	{
 		if (what._ptr)
@@ -144,7 +144,7 @@ public:
 		return os << "NaF";
 	}
 
-	std::string to_string() noexcept
+	std::string to_string() const noexcept
 	{
 		std::ostringstream ostr;
 		ostr << *this;
@@ -152,8 +152,9 @@ public:
 	}
 #endif
 
-	constexpr explicit operator bool() const noexcept { return _ptr != nullptr; }
 	constexpr bool operator!() const noexcept { return _ptr == nullptr; }
+	constexpr explicit operator bool() const noexcept { return !operator!(); }
+	friend struct std::hash<fiber_id>;
 };
 
 //-----------------------------------------------------------------------------------------
@@ -396,7 +397,7 @@ class alignas(16) fiber_base
 	struct callable_wrapper
 	{
 		std::decay_t<Fn> _func;
-		callable_wrapper(Fn&& func) noexcept : _func(std::forward<Fn>(func)) {}
+		constexpr callable_wrapper(Fn&& func) noexcept : _func(std::forward<Fn>(func)) {}
 	};
 
 	// stack: trampoline,fiber(wrapper func),rdi,rbp,r12,r13,r14,r15,fpu/sse flags
@@ -654,7 +655,7 @@ private:
 	static cvars& get_vars() noexcept
 	{
 		static thread_local fiber_base _main_ctx;
-		static thread_local fiber_base_ptr _main_ctx_ptr { fiber_base_ptr(&_main_ctx, [](auto *pp) {}) };
+		static thread_local fiber_base_ptr _main_ctx_ptr { fiber_base_ptr(&_main_ctx, [](auto *) {}) };
 		static thread_local cvars _cvars // per thread singleton
 		{
 			._uniq={_main_ctx_ptr},._curr=_main_ctx_ptr,._main=_main_ctx_ptr,
@@ -704,7 +705,7 @@ public:
 		uintptr_t *sp { reinterpret_cast<uintptr_t *>(params.stack->allocate(params.stacksz)) };
 		GetVars();
 		_ctx.reset(new (reinterpret_cast<char*>(sp))
-			fiber_base(std::forward<fiber_params>(params), std::forward<Fn>(func), sp, cur->get_id()), [](auto *pp) {});
+			fiber_base(std::forward<fiber_params>(params), std::forward<Fn>(func), sp, cur->get_id()), [](auto *) {});
 		uni.insert(_ctx);
 		sch.push_back(_ctx);
 		sort_queue(sch);
@@ -900,7 +901,7 @@ public:
 	}
 	template<typename Fn, typename... Args>
 	requires std::invocable<Fn&&, Args...> && (!std::is_bind_expression_v<Fn>)
-	void resume_with(Fn&& func, Args&&... args)
+	constexpr void resume_with(Fn&& func, Args&&... args)
 		{ resume_with(std::bind(std::forward<Fn>(func), std::forward<Args>(args)...)); }
 
 	template<std::invocable Fn>
@@ -982,7 +983,7 @@ void fiber_base::trampoline(void *ptr) noexcept
 	if (!sch.empty())
 		f8_this_fiber::yield();
 	if (!det.empty()) // pickup temporarily detached main
-		fiber_base::coroswitch(cur.get(), (det.begin())->get());
+		coroswitch(cur.get(), (det.begin())->get());
 	fiber::fiber_exit();
 }
 
@@ -1356,5 +1357,12 @@ namespace fibers
 };
 
 } // namespace FIX8
+
+// allowed specialisation of std::hash for fiber_id
+template<>
+struct std::hash<FIX8::fiber_id>
+{
+	std::size_t operator()(const FIX8::fiber_id& id) const noexcept { return reinterpret_cast<std::size_t>(id._ptr); }
+};
 
 #endif // FIX8_FIBER_HPP_
