@@ -41,7 +41,7 @@ Currently only `Linux/x86_64` is supported. Other platforms to be supported in t
 - **x86_64 Linux only**
 - single _header-only_
 - stackful fibers; stacksize configurable for each fiber
-- supports any callable object (eg. function, class member, lambda expression) with optional arguments
+- supports any [callable](https://en.cppreference.com/w/cpp/named_req/Callable) object (eg. function, class member, lambda expression) with optional arguments
 - heap based, memory-mapped or placement stacks; user definable stack can also be used
 - context switch implemented with inline assembly
 - fibers can be moved to other threads (can be configured out for performance)
@@ -788,6 +788,8 @@ With no command line arguments, the application will create a `jfiber` otherwise
 the fiber has completed. The default behaviour is the same as a `std::thread` that has not been joined - `terminate`. But with the `jfiber`, when `main` exits, the jfiber
 will join, so that the fiber is resumed. When the fiber has finished, the application can end.
 
+Note the use of the helper `make_fiber` and `fiber_ptr`.
+
 <details><summary><i>source</i></summary>
 <p>
 
@@ -809,8 +811,7 @@ void doit()
 
 int main(int argc, char *argv[])
 {
-   std::unique_ptr<fiber> fb { argc > 1 ? new fiber({.name="fiber"}, &doit)
-                                        : new jfiber({.name="jfiber"}, &doit) };
+	fiber_ptr fb { argc > 1 ? make_fiber({.name="fiber"}, &doit) : make_fiber<jfiber>({.name="jfiber"}, &doit) };
    this_fiber::yield();
    fibers::print();
    std::cout << "Exiting from main\n";
