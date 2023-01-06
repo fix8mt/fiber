@@ -811,7 +811,7 @@ void doit()
 
 int main(int argc, char *argv[])
 {
-	fiber_ptr fb { argc > 1 ? make_fiber({.name="fiber"}, &doit) : make_fiber<jfiber>({.name="jfiber"}, &doit) };
+   fiber_ptr fb { argc > 1 ? make_fiber({.name="fiber"}, &doit) : make_fiber<jfiber>({.name="jfiber"}, &doit) };
    this_fiber::yield();
    fibers::print();
    std::cout << "Exiting from main\n";
