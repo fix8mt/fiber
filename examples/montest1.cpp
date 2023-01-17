@@ -85,7 +85,8 @@ public:
 //-----------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
-	int interval{100}, fcnt{-1}, sleepval{50};
+	constexpr int sleep_default{50}, interval_default{100};
+	int interval{interval_default}, fcnt{-1}, sleepval{sleep_default}, val;
 	bool lorder{true}, skip{true};
 	fiber_monitor::sort_mode sm{ fiber_monitor::sort_mode::by_ms };
 
@@ -98,45 +99,33 @@ int main(int argc, char *argv[])
       { "fibers",		1, 0, 'f' },	{ "mode",		1, 0, 'm' }
    }};
 
-	for (int opt; (opt = getopt_long (argc, argv, optstr, long_options.data(), 0)) != -1;)
+	while ((val = getopt_long (argc, argv, optstr, long_options.data(), 0)) != -1)
 #else
-	for (int opt; (opt = getopt (argc, argv, optstr)) != -1;)
+	while ((val = getopt (argc, argv, optstr)) != -1)
 #endif
 	{
 		try
 		{
-			switch (opt)
+			switch (val)
 			{
-			case 'f':
-				fcnt = std::stoi(optarg);
-				break;
-			case 's':
-				sleepval = std::stoi(optarg);
-				break;
 			case 'm':
 				if (long unsigned ism{ std::stoul(optarg) - 1UL }; ism < static_cast<long unsigned>(fiber_monitor::sort_mode::count))
 					sm = fiber_monitor::sort_mode(ism);
 				break;
-			case 'r':
-				fibers::set_flag(global_fiber_flags::retain);
-				break;
-			case 'k':
-				skip = false;
-				break;
-			case 'o':
-				lorder = false;
-				break;
-			case 'i':
-				interval = std::stoi(optarg);
-				break;
+			case 'f': fcnt = std::stoi(optarg); break;
+			case 's': sleepval = std::stoi(optarg); break;
+			case 'r': fibers::set_flag(global_fiber_flags::retain); break;
+			case 'k': skip ^= true; break;
+			case 'o': lorder ^= true; break;
+			case 'i': interval = std::stoi(optarg); break;
 			case '?':
 			case ':':
 			case 'h':
 				std::cout << "Usage: " << argv[0] << " -[" << optstr << R"(]
-  -i,--interval interval msecs (default 100)
+  -i,--interval interval msecs (default )" << interval << R"()
   -f,--fibers fiber count (default )" << (fiber_monitor::get_terminal_dimensions().second - 4) << R"()
-  -s,--sleep sleep msecs (default 50)
-  -m,--mode sort mode )" << fiber_monitor::sort_help() << R"((default 3)
+  -s,--sleep sleep msecs (default )" << sleepval << R"()
+  -m,--mode sort mode )" << fiber_monitor::sort_help() << "(default " << (static_cast<long unsigned>(sm) + 1) << R"()
   -o,--order no launch order
   -k,--noskip no skip main
   -r,--interval retain finished fibers
@@ -166,16 +155,13 @@ int main(int argc, char *argv[])
 			&foo::func, &bar, 2 * (ii + 1)))->set_params("sub"s + std::to_string(ii));
 	}
 
-	while (fibers::has_fibers())
+	fibers::wait_all([&fm]()
 	{
-		this_fiber::yield();
 		if (!fm)
-		{
 			fibers::kill_all();
-			break;
-		}
-	}
+		return !fm;
+	});
 	fm.update();
-	std::this_thread::sleep_for(1s);
+	std::this_thread::sleep_for(2s);
 	return 0;
 }

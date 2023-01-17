@@ -32,7 +32,7 @@ Currently only `Linux/x86_64` is supported. Other platforms to be supported in t
 - header-only
 - `std::thread` like interface
 - no external dependencies
-- easy to use, lightweight
+- simplicity, lightweight
 - make use of C++20 features
 - constexpr where possible
 
@@ -64,8 +64,8 @@ Currently only `Linux/x86_64` is supported. Other platforms to be supported in t
 
 # Examples
 ## 1. A simple resumable function
-In the following example each iteration of `main` and `func` simply yields, printing the iteration count.
-Note to pass a reference to the fiber we need to use the `std::ref` wrapper. Before exiting `func` calls the built-in printer.
+In the following example each iteration of `main` and `func` simply yields, printing the iteration count before and after each yield.
+Note to pass a reference to the `flags` variable we need to use the `std::ref` wrapper. Before exiting `func` calls the built-in printer.
 When `func` exits, control returns to `main` where testing `f0` for non-zero returns false indicating the fiber has finished.
 
 Note that you can name a fiber using `fiber_params`, and using designated initialisers (here we use `.name`).

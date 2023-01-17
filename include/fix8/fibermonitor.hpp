@@ -104,7 +104,8 @@ public:
 
 	bool is_quit() const noexcept { return _quit; }
 	bool operator! () const noexcept { return is_quit(); }
-	std::pair<int, int> get_dimensions() const noexcept { return _dimensions; }
+	xy_coord get_dimensions() const noexcept { return _dimensions; }
+	virtual bool user_key_process(char key) noexcept { return false; }
 
 	static std::string sort_help() noexcept
 	{
@@ -167,7 +168,7 @@ public:
 			{
 				struct tcmp
 				{
-					sort_mode _smode;
+					const sort_mode _smode;
 					tcmp(sort_mode smode) : _smode(smode) {}
 					bool operator()(const fiber_base_ptr& lhs, const fiber_base_ptr& rhs) const
 					{
@@ -219,14 +220,14 @@ public:
 			case 'p':
 				_pause ^= true;
 				break;
-			case 'x':
-				_quit = true;
-				break;
-			case '0':
-				break;
 			default:
 				if (std::isdigit(event.ch)) //1 - 9
 					_mode = sort_mode(static_cast<int>(event.ch) - 0x31);
+				else if (user_key_process(event.ch))
+			case 'x':
+					_quit = true;
+				[[fallthrough]];
+			case '0':
 				break;
 			}
 		}

@@ -73,6 +73,7 @@ class Reader : public fiber
 	}
 
 	// non-blocking resumable reader
+	// message: [header:12-16][' '][body:80-102][' '][trailer:10]
 	void read_nb(int rdcnt)
 	{
 		int mread{};

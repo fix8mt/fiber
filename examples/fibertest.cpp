@@ -118,12 +118,13 @@ int main(void)
 		std::cout << "main: " << std::dec << ii << '\n';
 		//fibers::print(std::cout);
 	}
-	std::cout << "Exiting from main\nSizes\n";
+	std::cout << "Exiting from main\n";
+	std::cout << fibers::size_finished() << " fibers finished\n";
 	std::cout << "fiber: " << sizeof(fiber) << '\n';
 	std::cout << "fiber::cvars: " << sizeof(fiber::cvars) << '\n';
 	std::cout << "fiber::all_cvars: " << sizeof(fiber::all_cvars) << '\n';
 	std::cout << "fiber_id: " << sizeof(fiber_id) << '\n';
 	std::cout << "fiber_base: " << sizeof(fiber_base) << '\n';
-	std::cout <<"fiber_params: " << sizeof(fiber_params) << '\n';
+	std::cout << "fiber_params: " << sizeof(fiber_params) << '\n';
 	return 0;
 }

@@ -60,55 +60,72 @@ class foo : public fiber_monitor
 {
 	std::mt19937_64 _rnde {std::random_device{}()};
 	std::uniform_int_distribution<long> _exp;
-	bool _todisk;
+	bool _todisk, _percent;
 
 public:
-	foo(int interval, long maxexp, bool todisk) :
+	foo(int interval, long maxexp, bool todisk, bool percent) :
 		fiber_monitor(std::chrono::milliseconds(interval), fiber_monitor::sort_mode::by_ms),
-		_exp{1, maxexp}, _todisk(todisk) {}
+		_exp{1, maxexp}, _todisk(todisk), _percent(percent) {}
 
 	void func(int arg)
 	{
-		std::unique_ptr<std::ofstream> ofstr { _todisk ? std::make_unique<std::ofstream>(
+		std::unique_ptr<std::ofstream> dskfile { _todisk ? std::make_unique<std::ofstream>(
 			std::string { "worker"s + std::to_string(arg - 10) + ".out" }.c_str(), std::ios::trunc) : nullptr };
-
-		while(arg--)
+		mpz_class result;
+		for (int ii{}; ii < arg; ++ii)
 		{
 			auto expv { _exp(_rnde) }; // obtain our exponent
-			std::ostringstream ostr;
-			ostr << "2^" << expv;
-			this_fiber::name(ostr.str().c_str());
+			std::ostringstream expstr;
+			if (_percent)
+				expstr << ii << '/' << arg << " (" << (ii * 100 / arg) << "%)";
+			else
+				expstr << "2^" << expv;
+			this_fiber::name(expstr.str().c_str());
 			update();
 			mpz_class pr;
 			mpz_ui_pow_ui(pr.get_mpz_t(), 2, expv); // raise 2^expv
-			if (ofstr)
-				*ofstr << ostr.str() << " = " << pr << '\n';
+			is_quit() ? this_fiber::resume_main() : this_fiber::yield(); // user pressed 'x'?, yield mid processing
+			result += pr; // add to total
+			if (dskfile)
+				*dskfile << expstr.str() << " = " << pr << '\n';
 			update();
-			is_quit() ? this_fiber::resume_main() : this_fiber::yield(); // user pressed 'x'?
+			is_quit() ? this_fiber::resume_main() : this_fiber::yield(); // user pressed 'x'?. or yield
 		}
+		if (dskfile)
+			*dskfile << "result = " << result << '\n';
 		this_fiber::name("finished");
+	}
+	bool user_key_process(char ch) noexcept override
+	{
+		return ch == 'q';
 	}
 };
 
 //-----------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
-	int interval{}, fcnt{20}, val;
-	long maxexp{4999999999L};
-	bool todisk{}, threaded{}, retain{true};
+	constexpr long maxexp_default{3999999999L};
+	constexpr int fcnt_default{20};
+	long maxexp{maxexp_default};
+	int interval{}, fcnt{fcnt_default}, val;
+	bool todisk{}, threaded{}, retain{true}, percent{};
 
-	option long_options[]
-	{
+	static constexpr const char *optstr{"f:i:hm:wrp"};
+#ifdef _GNU_SOURCE
+   static constexpr const std::array<option, 7> long_options
+	{{
 		{ "help",		no_argument,			nullptr, 'h' },
 		{ "write",		no_argument,			nullptr, 'w' },
+		{ "percent",	no_argument,			nullptr, 'p' },
 		{ "fibers",		required_argument,	nullptr, 'f' },
 		{ "maxexp",		required_argument,	nullptr, 'm' },
 		{ "interval",	required_argument,	nullptr, 'i' },
-		{},
-	};
+	}};
 
-	static constexpr const char *optstr{"f:i:hm:wr"};
-	while ((val = getopt_long (argc, argv, optstr, long_options, 0)) != -1)
+	while ((val = getopt_long (argc, argv, optstr, long_options.data(), 0)) != -1)
+#else
+	while ((val = getopt (argc, argv, optstr)) != -1)
+#endif
 	{
 		try
 		{
@@ -119,15 +136,17 @@ int main(int argc, char *argv[])
 				[[fallthrough]];
 			case 'h':
 				std::cout << "Usage: " << argv[0] << " [-" << optstr << "]" << R"(
-  -w write results to disk files (default false)
-  -i interval msecs (default 0)
-  -r retain finished fibers (default true)
-  -f fiber count (default 20)
-  -m max exponent (default 4999999999)
+  -w write results to disk files (default )" << std::boolalpha << todisk << R"()
+  -i interval msecs (default )" << interval << R"()
+  -r retain finished fibers (default )" << std::boolalpha << retain << R"()
+  -p show percent remaining work (default )" << std::boolalpha << percent << R"()
+  -f fiber count (default )" << fcnt_default << R"()
+  -m max exponent (default )" << maxexp_default << R"()
   -h help)" << std::endl;
 			  return 0;
-			case 'w': todisk = true; break;
-			case 'r': retain = false; break;
+			case 'w': todisk ^= true; break;
+			case 'p': percent ^= true; break;
+			case 'r': retain ^= true; break;
 			case 'm': maxexp = std::stol(optarg); break;
 			case 'f': fcnt = std::stoi(optarg); break;
 			case 'i': interval = std::stoi(optarg); break;
@@ -142,26 +161,23 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (todisk && maxexp == 4999999999L)
+	if (todisk && maxexp == maxexp_default)
 		maxexp = 10000000L;
 	if (retain)
 		fibers::set_flag(global_fiber_flags::retain);
 
-	foo bar(interval, maxexp, todisk);
+	foo bar(interval, maxexp, todisk, percent);
 	std::vector<fiber_ptr> fbs;
 	for (int ii{}; ii < fcnt; ++ii)
 		fbs.emplace_back(make_fiber({.launch_order=ii}, &foo::func, &bar, ii + 10));
 
-	while (fibers::has_fibers())
+	fibers::wait_all([&bar]()
 	{
-		this_fiber::yield();
 		if (!bar)
-		{
 			fibers::kill_all();
-			break;
-		}
-	}
+		return !bar;
+	});
 	bar.update();
-	std::this_thread::sleep_for(3s);
+	std::this_thread::sleep_for(2s);
 	return 0;
 }
