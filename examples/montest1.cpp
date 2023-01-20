@@ -128,7 +128,7 @@ int main(int argc, char *argv[])
   -m,--mode sort mode )" << fiber_monitor::sort_help() << "(default " << (static_cast<long unsigned>(sm) + 1) << R"()
   -o,--order no launch order
   -k,--noskip no skip main
-  -r,--interval retain finished fibers
+  -r,--retain retain finished fibers (default false)
   -h,--help)" << std::endl;
 				exit(1);
 			default:

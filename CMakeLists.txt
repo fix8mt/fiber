@@ -40,12 +40,16 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 project (f8fiber VERSION 2.0)
 
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+
 include_directories(${CMAKE_SOURCE_DIR}/include)
 set(exdir ${CMAKE_SOURCE_DIR}/examples)
 file(GLOB esrc CONFIGURE_DEPENDS "${exdir}/fiber*.cpp")
 foreach(x ${esrc})
 	get_filename_component(fn ${x} NAME_WLE)
 	add_executable(${fn} ${x})
+	target_link_libraries(${fn} PRIVATE Threads::Threads)
 endforeach()
 
 # to disable building monitor tests:
@@ -85,7 +89,7 @@ if(BUILD_MONITOR)
 		add_dependencies(${fn} termbox2 gmp)
 		target_include_directories(${fn} PRIVATE ${termbox2} ${gmp})
 		target_link_directories(${fn} PRIVATE ${termbox2} ${gmp}/.libs)
-		target_link_libraries(${fn} PRIVATE termbox.a gmpxx.a gmp.a)
+		target_link_libraries(${fn} PRIVATE termbox.a gmpxx.a gmp.a Threads::Threads)
 	endforeach()
 endif()
 
