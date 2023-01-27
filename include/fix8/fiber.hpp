@@ -192,6 +192,7 @@ using fiber_ptr = std::unique_ptr<class fiber>;
 struct f8_fibers
 {
 	inline static int size() noexcept;
+	inline static int size_accurate() noexcept;
 	inline static int size_detached() noexcept;
 	inline static int size_finished() noexcept;
 	inline static bool has_fibers() noexcept;
@@ -564,10 +565,18 @@ public:
 		all_cvars& operator=(const all_cvars&) = delete;
 		all_cvars& operator=(all_cvars&&) = delete;
 
-		size_t size()
+		size_t size() const
 		{
 			f8_scoped_spin_lock guard(_tvs_spl);
 			return _tvs.size();
+		}
+		size_t count() const
+		{
+			size_t result{};
+			f8_scoped_spin_lock guard(_tvs_spl);
+			for (const auto& pp : _tvs)
+				result += pp.second->size();
+			return result;
 		}
 		bool insert(std::thread::id id, cvars *var)
 		{
@@ -1166,6 +1175,11 @@ const char *f8_this_fiber::name() noexcept { return GetVar(_curr)->name(); }
 
 //-----------------------------------------------------------------------------------------
 int f8_fibers::size() noexcept { return ConstGetVar(_sched).size(); }
+int f8_fibers::size_accurate() noexcept
+{
+	ConstGetVars();
+	return std::count_if(sch.cbegin(), sch.cend(), [](const fiber_base_ptr& pp) { return pp->joinable(); });
+}
 int f8_fibers::size_detached() noexcept { return ConstGetVar(_det).size(); }
 int f8_fibers::size_finished() noexcept { return ConstGetVar(_finished); }
 bool f8_fibers::has_fibers() noexcept { return size(); }
@@ -1369,6 +1383,7 @@ namespace this_fiber
 namespace fibers
 {
 	inline int size() noexcept { return f8_fibers::size(); }
+	inline int size_accurate() noexcept { return f8_fibers::size_accurate(); }
 	inline int size_detached() noexcept { return f8_fibers::size_detached(); }
 	inline int size_finished() noexcept { return f8_fibers::size_finished(); }
 	inline bool has_fibers() noexcept { return f8_fibers::size() != 0; }
