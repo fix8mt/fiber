@@ -73,7 +73,7 @@ void doit_with_stoprequest(std::string_view spacer, bool& stop_requested)
 //-----------------------------------------------------------------------------------------
 int main(void)
 {
-	fiber sub_co({.name="sub0"}, &doit, 9, "\t"), sub_co1({.name="sub1"}, [](int arg, std::string_view spacer)
+	fiber sub_co({"sub0"}, &doit, 9, "\t"), sub_co1({"sub1"}, [](int arg, std::string_view spacer)
 	{
 		blah b;
 		bool stop_requested{};

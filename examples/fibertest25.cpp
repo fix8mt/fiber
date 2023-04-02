@@ -52,7 +52,7 @@ void doit()
 //-----------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
-	auto fb { argc > 1 ? make_fiber({.name="fiber"}, &doit) : make_fiber<jfiber>({.name="jfiber"}, &doit) };
+	auto fb { argc > 1 ? make_fiber({"fiber"}, &doit) : make_fiber<jfiber>({"jfiber"}, &doit) };
 	this_fiber::yield();
 	fibers::print();
 	std::cout << "Exiting from main\n";

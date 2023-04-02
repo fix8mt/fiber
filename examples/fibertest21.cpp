@@ -70,10 +70,10 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	fiber f0({.name="first"}, &sub, 15), f1({.name="second"}, &sub, 12), f2({.name="third"}, &sub, 13);
+	fiber f0({"first"}, &sub, 15), f1({"second"}, &sub, 12), f2({"third"}, &sub, 13);
 	std::thread t1([stcnt]()
 	{
-		fiber ft1({.name="tfirst"}, &sub, stcnt);
+		fiber ft1({"tfirst"}, &sub, stcnt);
 		for (int ii{}; fibers::has_fibers(); ++ii)
 		{
 			std::cout << "main1 " << ii << '\n';

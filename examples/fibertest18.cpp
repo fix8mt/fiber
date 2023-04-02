@@ -55,7 +55,7 @@ int main(void)
 		{
 			std::packaged_task task([](int arg)
 			{
-				std::cout << "\tStarting " << this_fiber::name(std::string(this_fiber::name() + std::to_string(arg)).c_str()) << '\n';
+				std::cout << "\tStarting " << this_fiber::name(std::string(this_fiber::name()) + std::to_string(arg)) << '\n';
 				int result{};
 				for (int ii{}; ii < arg; this_fiber::yield())
 				{
@@ -66,7 +66,7 @@ int main(void)
 				return result;
 			});
 			flist.emplace_back(task.get_future());
-			fiber({.launch_order=ii,.name="sub"}, std::move(task), ii).detach();
+			fiber({.name="sub",.launch_order=ii}, std::move(task), ii).detach();
 		}
 	}).join();
 

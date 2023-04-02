@@ -54,10 +54,10 @@ void sub(int arg)
 //-----------------------------------------------------------------------------------------
 int main(void)
 {
-	fiber f0({.name="first"}, &sub, 10), f2({.name="second"}, &sub, 10);
+	fiber f0({"first"}, &sub, 10), f2({"second"}, &sub, 10);
 	std::thread t1([]()
 	{
-		jfiber ft1({.name="thread:first"}, &sub, 10);
+		jfiber ft1({"thread:first"}, &sub, 10);
 		for (int ii{}; fibers::has_fibers(); ++ii)
 		{
 			std::cout << "main1 " << ii << '\n';

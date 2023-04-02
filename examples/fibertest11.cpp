@@ -42,6 +42,13 @@ using namespace FIX8;
 //-----------------------------------------------------------------------------------------
 int main()
 {
+	static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
+	{{
+		{	R"("I)",		"all",	"said",	"It’s",		"I’m",		"\n  –",			},
+		{	"thankful",	"those",	"to",		"of",			"it",			"Einstein\n"	},
+		{	"for",		"who",	"me.",	"them",		"myself\".",					},
+		{	"am",			"of",		"no",		"because",	"doing",		"Albert",		},
+	}};
 	auto func([](const auto& words)
 	{
 		for (auto pp : words)
@@ -51,27 +58,16 @@ int main()
 		}
 	});
 
-	static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
-	{{
-		{	R"("I)",		"all",	"said",	"It’s",		"I’m",		"\n  –",			},
-		{	"thankful",	"those",	"to",		"of",			"it",			"Einstein\n"	},
-		{	"for",		"who",	"me.",	"them",		"myself\".",					},
-		{	"am",			"of",		"no",		"because",	"doing",		"Albert",		},
-	}};
 	std::array work
 	{
-		fiber{ {.launch_order=0,.name="first"},	func, wordset[0] },
-		fiber{ {.launch_order=2,.name="second"},	func, wordset[1] },
-		fiber{ {.launch_order=3,.name="third"},	func, wordset[2] },
-		fiber{ {.launch_order=1,.name="fourth"},	func, wordset[3] }
+		fiber{ {.launch_order=0},	func, wordset[0] },
+		fiber{ {.launch_order=2},	func, wordset[1] },
+		fiber{ {.launch_order=3},	func, wordset[2] },
+		fiber{ {.launch_order=1},	func, wordset[3] }
 	};
 
-	fibers::print();
-	std::cout << std::endl;
-
 	fibers::set_flag(global_fiber_flags::skipmain);
-	//while(fibers::has_fibers())
-		this_fiber::yield();
+	this_fiber::yield();
 
 	return 0;
 }

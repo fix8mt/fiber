@@ -61,7 +61,7 @@ void doit(int arg)
 //-----------------------------------------------------------------------------------------
 int main(void)
 {
-	fiber sub_co({.name="sub0"}, &doit, 9), sub_co1({.name="sub1"}, &doit, 10);
+	fiber sub_co({"sub0"}, &doit, 9), sub_co1({"sub1"}, &doit, 10);
 	fibers::print();
 	for (int ii{}; fibers::has_fibers(); ++ii)
 	{

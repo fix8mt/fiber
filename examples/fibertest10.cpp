@@ -42,27 +42,25 @@ using namespace FIX8;
 //-----------------------------------------------------------------------------------------
 int main()
 {
-	std::thread([]()
+	static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
+	{{
+		{	R"("I )",		"all ",		"said ",	"It’s ",		"I’m ",			"\n – ",			},
+		{	"am ",			"of ",		"no ",	"because ",	"doing ",		"Albert ",		},
+		{	"thankful ",	"those ",	"to ",	"of ",		"it ",			"Einstein\n"	},
+		{	"for ",			"who ",		"me. ",	"them ",		R"(myself.")",						},
+	}};
+
+	for (const auto& pp : wordset)
 	{
-		static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
-		{{
-			{	R"("I )",		"all ",		"said ",	"It’s ",		"I’m ",			"\n – ",			},
-			{	"am ",			"of ",		"no ",	"because ",	"doing ",		"Albert ",		},
-			{	"thankful ",	"those ",	"to ",	"of ",		"it ",			"Einstein\n"	},
-			{	"for ",			"who ",		"me. ",	"them ",		R"(myself.")",						},
-		}};
-		for (const auto& pp : wordset)
+		fiber ([](const auto& words)
 		{
-			fiber ([](const auto& words)
+			for (auto qq : words)
 			{
-				for (auto qq : words)
-				{
-					std::cout << qq;
-					this_fiber::yield();
-				}
-			}, pp).detach();
-		}
-	}).join();
+				std::cout << qq;
+				this_fiber::yield();
+			}
+		}, pp).detach();
+	}
 
 	return 0;
 }

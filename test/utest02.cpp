@@ -31,37 +31,57 @@
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
-#include <iostream>
+#include <catch2/catch_session.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <functional>
-#include <deque>
-#include <set>
+#include <sstream>
 #include <future>
-#include <string>
+#include <thread>
+#include <queue>
+#include <random>
+#include <array>
+#include <string_view>
+#include <list>
+#include <chrono>
 #include <fix8/fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
+using namespace std::literals;
 
 //-----------------------------------------------------------------------------------------
-struct foo : fiber
+void doit()
 {
-	constexpr foo(fiber_params&& fp) : fiber(std::move(fp), [this]()
+	for(int ii{}; ii < 10; ++ii)
+		std::this_thread::sleep_for(10ms);
+}
+
+TEST_CASE("jfiber - auto joining fiber", "[fiber]")
+{
+	jfiber{doit};
+}
+
+TEST_CASE("fiber - non auto joining fiber", "[fiber]")
+{
+	fibers::set_flag(global_fiber_flags::excepthandling);
+	fibers::set_flag(global_fiber_flags::termthrow);
+	fiber{doit};
+}
+
+//-----------------------------------------------------------------------------------------
+int main(int argc, char *argv[])
+{
+	int result{};
+	try
 	{
-		std::cout << "\tstarting " << name() << '\n';
-		for (int ii{}; ii < 5; this_fiber::yield())
-			std::cout << '\t' << name() << ": " << std::dec << ++ii << '\n';
-		fibers::print();
-		std::cout << "\tleaving " << name() << '\n';
-	}) {}
-};
+		result = Catch::Session().run(argc, argv);
+		if (fibers::get_exception_ptr())
+			std::rethrow_exception(fibers::get_exception_ptr());
+	}
+	catch(const std::exception& e)
+	{
+		std::cerr << "exception: " << e.what() << '\n';
+	}
 
-//-----------------------------------------------------------------------------------------
-int main(void)
-{
-	foo sub_co({"sub_co"}), sub_co1({"sub_co1"}), sub_co2({"sub_co2"});
-	for (int ii{}; fibers::has_fibers(); this_fiber::yield())
-		std::cout << "main: " << ++ii << '\n';
-	std::cout << "exiting main\n";
-	fibers::print();
-	return 0;
+	return result;
 }

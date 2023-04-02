@@ -64,7 +64,7 @@ void sub(int arg, int spacer)
 int main()
 {
 	int ii{};
-	for (fiber myfiber({.name="sub"}, &sub, 10, 1); myfiber; this_fiber::yield())
+	for (fiber myfiber({"sub"}, &sub, 10, 1); myfiber; this_fiber::yield())
 	{
 		std::cout << "main: " << ++ii << '\n';
 		if (ii == 9)

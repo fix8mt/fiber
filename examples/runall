@@ -32,10 +32,10 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 #-----------------------------------------------------------------------------------------
-for file in `ls ./fibertest* | sort -V`
+for file in `ls ./fibertest* ./utest* | sort -V`
 do
 	if [ -x ${file} ]; then
-		echo -e "\nRunning:" ${file}
+		echo -e "\n\e[1;92mRunning:" ${file} "\e[m"
 		${file}
 	fi
 done

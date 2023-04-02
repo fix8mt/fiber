@@ -51,9 +51,13 @@ class foo
 		auto dist{std::uniform_int_distribution<long>(1, std::numeric_limits<long>().max())};
       for (; numtogen; --numtogen)
       {
+			int cnt{};
 			while(_queue.size() < 5)
+			{
 				_queue.push(dist(rnde));
-			std::cout << "\tproduced: " << _queue.size() << '\n';
+				++cnt;
+			}
+			std::cout << "\tproduced: " << cnt << '\n';
 			_consume.resume(); // switch to consumer
       }
 		_consume.schedule(); // consumer is next fiber to run
@@ -64,12 +68,13 @@ class foo
 		std::cout << "\tconsumer:entry (id:" << this_fiber::get_id() << ")\n";
       while (_produce)
       {
-			std::cout << "\tconsuming: " << _queue.size() << '\n';
+			int cnt{};
 			while(!_queue.empty())
 			{
-				std::cout << "\t\t" << _queue.front() << '\n';
+				std::cout << "\t\t" << ++cnt << ": " << _queue.front() << '\n';
 				_queue.pop();
 			}
+			std::cout << "\tconsumed: " << cnt << '\n';
 			_produce.resume(); // switch to producer
       }
       std::cout << "\tconsumer:exit\n";
@@ -86,7 +91,14 @@ public:
 int main(int argc, char *argv[])
 {
    std::cout << "main:entry\n";
-   foo(argc > 1 ? std::stoi(argv[1]) : 10);
+	try
+	{
+		foo(argc > 1 ? std::stoi(argv[1]) : 10);
+	}
+	catch (const std::exception& e)
+	{
+		std::cerr << "exception: " << e.what() << std::endl;
+	}
    std::cout << "main:exit\n";
    return 0;
 }

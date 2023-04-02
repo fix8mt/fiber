@@ -42,36 +42,19 @@
 using namespace FIX8;
 
 //-----------------------------------------------------------------------------------------
-/*
-void Fibonacci(int& val)
+template<typename T>
+void fibonacci (T& val)
 {
+	int cnt{};
 	val = 0;
-	this_fiber::yield(); // F(0) -> 0
-	int prev{}, curr{1};
-	while (true)
+	for(T next{1}; !fibers::terminating(); val = std::exchange(next, val + next))
 	{
-		val = curr;
+		++cnt;
 		this_fiber::yield();
-		int tmp { prev + curr };
-		prev = curr;
-		curr = tmp;
 	}
+	std::cout << "fiber: generated " << cnt << " values\n";
+	fibers::print();
 }
-
-int main()
-{
-	int val{};
-	fiber fib(Fibonacci, std::ref(val));
-	while (val < 1597)
-	{
-		fib.resume();
-		std::cout << val << '\n';
-	}
-	fib.kill();
-
-	return 0;
-}
-*/
 
 int main(int argc, char *argv[])
 {
@@ -85,19 +68,14 @@ int main(int argc, char *argv[])
 		std::cerr << "exception (" << e.what() << "): " << argv[1] << std::endl;
 		exit(1);
 	}
-	uint64_t val{};
-	fiber fib {[&val]()
-	{
-		for(uint64_t next{1};; val = std::exchange(next, val + next))
-			this_fiber::yield();
-	}};
+	uint64_t val;
+	fiber(fibonacci<uint64_t>, std::ref(val)).detach();
 
 	while (num--)
 	{
-		fib.resume();
+		this_fiber::yield();
 		std::cout << val << ' ';
 	}
-	fib.kill();
 	std::cout << "\nmain: done\n";
 	return 0;
 }

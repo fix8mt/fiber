@@ -107,25 +107,22 @@ int main(int argc, char *argv[])
 	constexpr long maxexp_default{3999999999L};
 	constexpr int fcnt_default{20};
 	long maxexp{maxexp_default};
-	int interval{}, fcnt{fcnt_default}, val;
+	int interval{}, fcnt{fcnt_default};
 	bool todisk{}, threaded{}, retain{true}, percent{};
 
 	static constexpr const char *optstr{"f:i:hm:wrp"};
-#ifdef _GNU_SOURCE
-   static constexpr const std::array<option, 7> long_options
-	{{
-		{ "help",		no_argument,			nullptr, 'h' },
-		{ "write",		no_argument,			nullptr, 'w' },
-		{ "percent",	no_argument,			nullptr, 'p' },
-		{ "fibers",		required_argument,	nullptr, 'f' },
-		{ "maxexp",		required_argument,	nullptr, 'm' },
-		{ "interval",	required_argument,	nullptr, 'i' },
-	}};
+   static constexpr const std::array long_options
+	{
+		option{ "help",		no_argument,			nullptr, 'h' },
+		option{ "write",		no_argument,			nullptr, 'w' },
+		option{ "percent",	no_argument,			nullptr, 'p' },
+		option{ "fibers",		required_argument,	nullptr, 'f' },
+		option{ "maxexp",		required_argument,	nullptr, 'm' },
+		option{ "interval",	required_argument,	nullptr, 'i' },
+      option{}
+	};
 
-	while ((val = getopt_long (argc, argv, optstr, long_options.data(), 0)) != -1)
-#else
-	while ((val = getopt (argc, argv, optstr)) != -1)
-#endif
+	for (int val; (val = getopt_long (argc, argv, optstr, long_options.data(), 0)) != -1; )
 	{
 		try
 		{
@@ -155,8 +152,10 @@ int main(int argc, char *argv[])
 		}
 		catch (const std::exception& e)
 		{
-			std::cerr << optarg << ": error: invalid value for switch \'"
-				<< static_cast<char>(val) << "\' (" << e.what() << ')' << std::endl;
+			std::cerr << "exception: " << e.what();
+			if (optarg)
+				std::cerr << " (" << static_cast<char>(val) << ':' << optarg << ')';
+			std::cerr << std::endl;
 			return 1;
 		}
 	}

@@ -89,14 +89,13 @@ void sub2(int arg)
 //-----------------------------------------------------------------------------------------
 int main(void)
 {
-	fiber f0({.name="first"},&sub, 15);
+	fiber f0({"first"},&sub, 15);
 	std::thread t1([]()
 	{
-		fiber f1({.name="second"},&sub1, 12), f2({.name="third"},&sub2, 13);
+		fiber f1({"second"},&sub1, 12), f2({"third"},&sub2, 13);
 		while (fibers::has_fibers())
 		{
 			std::cout << "main1\n";
-			//fibers::print();
 			this_fiber::yield();
 		}
 		std::cout << "Exiting from main1\n";
@@ -109,7 +108,6 @@ int main(void)
 #else
 		std::cout << "main\n";
 #endif
-		//fibers::print();
 		this_fiber::yield();
 	}
 	std::cout << "Exiting from main\n";

@@ -55,10 +55,10 @@ void func (int loops)
 
 int main(int argc, char *argv[])
 {
-   fiber f0({.name="func0"}, func, 5), f1({.name="func1"}, func, 10), f2({.name="func2"}, func, 15);
+   fiber f0({"func0"}, func, 5), f1({"func1"}, func, 10), f2({"func2"}, func, 15);
 	argc > 1 ? fibers::wait_all() : fibers::wait_any();
-	std::cout << fibers::size_finished() << " fibers finished, " << fibers::size_accurate() << " remaining\n";
-	std::cout << fibers::kill_all() << " killed\n";
+	std::cout << fibers::size_finished() << " fibers finished, " << fibers::size_accurate() << " remaining\n"
+				<< fibers::kill_all() << " killed\n";
    return 0;
 }
 

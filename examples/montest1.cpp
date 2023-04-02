@@ -45,36 +45,35 @@
 #include <fix8/fiber.hpp>
 #include <fix8/fibermonitor.hpp>
 #include <unistd.h>
-#ifdef _GNU_SOURCE
 #include <getopt.h>
-#endif
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
 using namespace std::literals;
 
 //-----------------------------------------------------------------------------------------
-class foo
+class foo : public fiber_monitor
 {
 	std::mt19937_64 _rnde {std::random_device{}()};
 	std::uniform_int_distribution<int> _dist{1, 224};
-	fiber_monitor& _fm;
 	int _sleepval, _val;
 	window_frame _xyxy;
 
 public:
-	foo(fiber_monitor& fm, int sleepval) : _fm(fm), _sleepval(sleepval),
-		_xyxy({{}, {_fm.get_dimensions().first, _fm.get_dimensions().second}}) {}
+	foo(int sleepval, std::chrono::milliseconds timeout, sort_mode mode)
+		: fiber_monitor(timeout, mode), _sleepval(sleepval), _xyxy({{}, {get_dimensions().first, get_dimensions().second}}) {}
 
 	void func(int arg)
 	{
-		while (arg--)
+		this_fiber::name("sub"s + std::to_string(arg));
+		auto num { 2 * ++arg };
+		while (num--)
 		{
 			double varr[arg * _dist(_rnde)]; // consume variable amt of stack
 			_val = varr[_dist(_rnde)]; // force optimizer hands off
 
-			_fm.update(_xyxy);
-			if (!_fm)
+			update(_xyxy);
+			if (!*this)
 				this_fiber::resume_main();
 			std::this_thread::sleep_for(std::chrono::milliseconds(_sleepval));
 			this_fiber::yield();
@@ -86,30 +85,28 @@ public:
 int main(int argc, char *argv[])
 {
 	constexpr int sleep_default{50}, interval_default{100};
-	int interval{interval_default}, fcnt{-1}, sleepval{sleep_default}, val;
+	int interval{interval_default}, fcnt{-1}, sleepval{sleep_default};
 	bool lorder{true}, skip{true};
 	fiber_monitor::sort_mode sm{ fiber_monitor::sort_mode::by_ms };
 
 	static constexpr auto optstr { "f:i:s:om:rkh" };
-#ifdef _GNU_SOURCE
-   static constexpr const std::array<option, 9> long_options
-   {{
-      { "help",		0, 0, 'h' },	{ "retain",		0, 0, 'r' },	{ "order",		0, 0, 'o' },
-      { "noskip",		0, 0, 'k' },	{ "sleep",		1, 0, 's' },	{ "interval",	1, 0, 'i' },
-      { "fibers",		1, 0, 'f' },	{ "mode",		1, 0, 'm' }
-   }};
+   static constexpr const std::array long_options
+   {
+      option{ "help",		no_argument,			0, 'h' },	option{ "retain",		no_argument,			0, 'r' },
+		option{ "order",		no_argument,			0, 'o' },	option{ "noskip",		no_argument,			0, 'k' },
+		option{ "sleep",		required_argument,	0, 's' },	option{ "interval",	required_argument,	0, 'i' },
+      option{ "fibers",		required_argument,	0, 'f' },	option{ "mode",		required_argument,	0, 'm' },
+      option{}
+   };
 
-	while ((val = getopt_long (argc, argv, optstr, long_options.data(), 0)) != -1)
-#else
-	while ((val = getopt (argc, argv, optstr)) != -1)
-#endif
+	for (int val; (val = getopt_long (argc, argv, optstr, long_options.data(), 0)) != -1; )
 	{
 		try
 		{
 			switch (val)
 			{
 			case 'm':
-				if (long unsigned ism{ std::stoul(optarg) - 1UL }; ism < static_cast<long unsigned>(fiber_monitor::sort_mode::count))
+				if (auto ism{ std::stoul(optarg) - 1UL }; ism < static_cast<long unsigned>(fiber_monitor::sort_mode::count))
 					sm = fiber_monitor::sort_mode(ism);
 				break;
 			case 'f': fcnt = std::stoi(optarg); break;
@@ -129,7 +126,9 @@ int main(int argc, char *argv[])
   -o,--order no launch order
   -k,--noskip no skip main
   -r,--retain retain finished fibers (default false)
-  -h,--help)" << std::endl;
+  -h,--help)
+e.g.
+  ./montest1 --mode 8 --retain --interval 0 --sleep 25)" << std::endl;
 				exit(1);
 			default:
 				break;
@@ -137,31 +136,30 @@ int main(int argc, char *argv[])
 		}
 		catch (const std::exception& e)
 		{
-			std::cerr << "exception: " << e.what() << std::endl;
+			std::cerr << "exception: " << e.what();
+			if (optarg)
+				std::cerr << " (" << static_cast<char>(val) << ':' << optarg << ')';
+			std::cerr << std::endl;
 			exit(1);
 		}
 	}
 
 	if (skip)
 		fibers::set_flag(global_fiber_flags::skipmain);
-	fiber_monitor fm{std::chrono::milliseconds(interval), sm};
-	foo bar(fm, sleepval);
+	foo bar(sleepval, std::chrono::milliseconds(interval), sm);
 	if (fcnt == -1)
-		fcnt = fm.get_dimensions().second - 4;
+		fcnt = bar.get_dimensions().second - 4;
 	std::vector<fiber_ptr> fbs;
 	for (int ii{}; ii < fcnt; ++ii)
-	{
-		fbs.emplace_back(make_fiber({.launch_order=lorder ? ii : 99,.stacksz=(fcnt * 4096lu) & ~0xff},
-			&foo::func, &bar, 2 * (ii + 1)))->set_params("sub"s + std::to_string(ii));
-	}
+		fbs.emplace_back(make_fiber({.launch_order=lorder ? ii : 99,.stacksz=(fcnt * 4096lu) & ~0xff}, &foo::func, &bar, ii));
 
-	fibers::wait_all([&fm]()
+	fibers::wait_all([&bar]()
 	{
-		if (!fm)
+		if (!bar)
 			fibers::kill_all();
-		return !fm;
+		return !bar;
 	});
-	fm.update();
+	bar.update();
 	std::this_thread::sleep_for(2s);
 	return 0;
 }

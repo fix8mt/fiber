@@ -3,15 +3,16 @@
 </p>
 
 # fiber
-### A novel C++20 fiber implementation with similar interface to `std::thread`, header-only / x86_64 / Linux only / stackful / built-in scheduler / thread shareable
+
+### A novel C++20 fiber implementation with similar interface to `std::thread`, header-only / `x86_64` / Linux only / stackful / built-in scheduler / thread shareable
 
 ------------------------------------------------------------------------
 ## Introduction
-This is a novel fiber implementation with a similar interface to `std::thread`. Taking any callable object, fibers cooperatively yield amongst
-themselves and the calling function within a single thread. Using fibers, single threaded applications can be written as though they were multi-threaded,
-with the advantage that no concurrency management is required.
+This is a novel fiber implementation with a similar interface to `std::thread`. Taking any callable object, fibers execute and cooperatively yield amongst
+themselves and the calling function all within a single thread. Using fibers, single threaded applications can be written as though they were multi-threaded,
+with the advantage that no concurrency controls are required.
 For multi-threaded applications, each thread maintains its own list of running fibers, leaving the user to implement their own concurrency controls. This
-implementation allows you to move fibers between threads. This can be used to share work or scale an application by adding more fibers to other or new threads.
+implementation allows you to move fibers between threads. This can be used to share work or scale an application by adding more fibers to new or existing threads.
 
 Currently only `Linux/x86_64` is supported. Other platforms to be supported in the future.
 
@@ -19,25 +20,27 @@ Currently only `Linux/x86_64` is supported. Other platforms to be supported in t
 |:--:|
 | Screenshot from *`montest2`* with 20 fibers working in one thread and using `fiber_monitor`|
 
-- [wiki]( https://github.com/fix8mt/fiber/wiki) for complete documentation.
-- [API](https://github.com/fix8mt/fiber/wiki/API) for API documentation.
-- [Building](https://github.com/fix8mt/fiber/wiki/Building) for build options and settings
-- [Monitor](https://github.com/fix8mt/fiber/wiki/Monitor) for built-in monitor documentation.
-- [here](https://github.com/fix8mt/fiber/blob/main/include/fix8/fiber.hpp) for implementation.
-
-- [here](https://github.com/fix8mt/fiber/tree/f8_fiber_boost) for the original `f8fiber` implementation.
+## Quick links
+|**Link**|**Description**|
+--|--
+|[Wiki]( https://github.com/fix8mt/fiber/wiki)| for complete documentation|
+|[API](https://github.com/fix8mt/fiber/wiki/API)| for API documentation|
+|[Building](https://github.com/fix8mt/fiber/wiki/Building)| for build options and settings|
+|[Monitor](https://github.com/fix8mt/fiber/wiki/Monitor)| for built-in monitor documentation|
+|[Examples](https://github.com/fix8mt/fiber/wiki/Examples)| for details about all the included examples|
+|[Here](https://github.com/fix8mt/fiber/blob/main/include/fix8/fiber.hpp)| for implementation|
+|[Here](https://github.com/fix8mt/fiber/tree/f8_fiber_boost)| for the original `f8fiber` implementation|
 
 ## Motivation
-
 - header-only
 - `std::thread` like interface
 - no external dependencies
 - simplicity, lightweight
 - make use of C++20 features
 - constexpr where possible
+- expand and improve interface
 
 ## Features
-
 - **x86_64 Linux only**
 - single _header-only_
 - stackful fibers; stacksize configurable for each fiber
@@ -55,9 +58,9 @@ Currently only `Linux/x86_64` is supported. Other platforms to be supported in t
 - built-in round-robin scheduler
 - can be used with `std::packaged_task`, `std::future`, `std::promise` and so forth
 - fast, very lightweight
-- fiber exceptions and handling
+- fiber exceptions and general [exception handling](https://github.com/fix8mt/fiber/wiki/API#8-exception-handling)
 - built-in instrumentation (can be configured out for performance)
-- lots of [examples](https://github.com/fix8mt/fiber/tree/main/examples)
+- lots of [examples](https://github.com/fix8mt/fiber/wiki/Examples)
 - full [API](https://github.com/fix8mt/fiber/wiki/API) documentation
 - supports `jfiber` (similar to `std::jthread`)
 - works with gcc, clang
@@ -68,7 +71,7 @@ In the following example each iteration of `main` and `func` simply yields, prin
 Note to pass a reference to the `flags` variable we need to use the `std::ref` wrapper. Before exiting `func` calls the built-in printer.
 When `func` exits, control returns to `main` where testing `f0` for non-zero returns false indicating the fiber has finished.
 
-Note that you can name a fiber using `fiber_params`, and using designated initialisers (here we use `.name`).
+Note that you can name a fiber using `fiber_params`.
 
 <details><summary><i>source</i></summary>
 <p>
@@ -95,7 +98,7 @@ int main(int argc, char *argv[])
 {
    std::cout << "main:entry\n";
    bool flags{false};
-   fiber f0({.name="func"}, &func, std::ref(flags), 5);
+   fiber f0({"func"}, &func, std::ref(flags), 5);
    std::cout << "flags=" << std::boolalpha << flags << '\n';
 
    for (int ii{}; f0; ++ii)
@@ -207,12 +210,13 @@ class foo
       std::cout << "\tconsumer:entry (id:" << this_fiber::get_id() << ")\n";
       while (_produce)
       {
-         std::cout << "\tconsuming: " << _queue.size() << '\n';
+         int cnt{};
          while(!_queue.empty())
          {
-            std::cout << "\t\t" << _queue.front() << '\n';
+            std::cout << "\t\t" << ++cnt << ": " << _queue.front() << '\n';
             _queue.pop();
          }
+         std::cout << "\tconsumed: " << cnt << '\n';
          _produce.resume(); // switch to producer
       }
       std::cout << "\tconsumer:exit\n";
@@ -243,45 +247,45 @@ int main(int argc, char *argv[])
 ```bash
 $ ./fibertest22 5
 main:entry
-    producer:entry (id:1264)
-    produced: 5
-    consumer:entry (id:7680)
-    consuming: 5
-        9006504732960815355
-        1781103120749064705
-        6966354033646592350
-        4358010012647317115
-        603768905407925817
-    produced: 5
-    consuming: 5
-        8734939180434996784
-        1676384271993826509
-        869932529665057971
-        4816699585965817430
-        5637662178269693061
-    produced: 5
-    consuming: 5
-        4135914334369669228
-        1903312331837899726
-        8829513953489580190
-        2292755538778589903
-        6104959425910156539
-    produced: 5
-    consuming: 5
-        1024622781262238278
-        3563469294337977128
-        5927565148155393990
-        8084244269773541229
-        3096242194760390707
-    produced: 5
-    consuming: 5
-        486757676517117182
-        7100513006800877057
-        8974964789426151320
-        2186761309412901617
-        5280778837716280722
-    producer:exit
-    consumer:exit
+  producer:entry (id:4016)
+  produced: 5
+  consumer:entry (id:1968)
+	 1: 1349602525532272804
+	 2: 316583067409009491
+	 3: 1020347932332564514
+	 4: 3829997051190076899
+	 5: 947478241006829049
+  consumed: 5
+  produced: 5
+	 1: 3617976082375098752
+	 2: 3972849389773859934
+	 3: 7998668485491537141
+	 4: 4650831140486621276
+	 5: 7332043501653828395
+  consumed: 5
+  produced: 5
+	 1: 2230847709081134901
+	 2: 6965146163979072417
+	 3: 6029855094014219769
+	 4: 1063218563532550271
+	 5: 1444553618767029414
+  consumed: 5
+  produced: 5
+	 1: 4198632358838426114
+	 2: 9056029556599489020
+	 3: 8320555710292082575
+	 4: 2721317769035964708
+	 5: 4913464453217416140
+  consumed: 5
+  produced: 5
+	 1: 3735451366216011356
+	 2: 4377846252953671965
+	 3: 5218125716664024839
+	 4: 6370858901001428693
+	 5: 6699210929525116824
+  consumed: 5
+  producer:exit
+  consumer:exit
 main:exit
 $
 ```
@@ -454,10 +458,11 @@ $
 ## 4. Detached fiber workpiece
 In this example, four detached fibers are created in a new thread.
 
-When the thread ends, the detached fibers are activated (at `join()`) in creation order.
-Each fiber takes a lambda expression as its callable object, which prints from an array constructed with every fourth word until the array is exhausted.
+When main ends, the detached fibers are activated in creation order. Each fiber takes a lambda expression as its callable object,
+which prints from an array constructed with every fourth word until the array is exhausted.
 
 Note the ctor for each fiber takes a reference to one of the `string_view` arrays, passed as an argument.
+See fibertest10.cpp
 
 <details><summary><i>source</i></summary>
 <p>
@@ -471,27 +476,25 @@ using namespace FIX8;
 
 int main()
 {
-   std::thread([]()
-   {
-      static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
-      {{
-         {  R"("I )",      "all ",     "said ", "It’s ",    "I’m ",        "\n – ",      },
-         {  "am ",         "of ",      "no ",   "because ", "doing ",      "Albert ",    },
-         {  "thankful ",   "those ",   "to ",   "of ",      "it ",         "Einstein\n"  },
-         {  "for ",        "who ",     "me. ",  "them ",    R"(myself.")",               },
-      }};
-      for (const auto& pp : wordset)
-      {
-         fiber ([](const auto& words)
-         {
-            for (auto qq : words)
-            {
-               std::cout << qq;
-               this_fiber::yield();
-            }
-         }, pp).detach();
-      }
-   }).join();
+	static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
+	{{
+		{  R"("I )",      "all ",     "said ", "It’s ",    "I’m ",        "\n – ",      },
+		{  "am ",         "of ",      "no ",   "because ", "doing ",      "Albert ",    },
+		{  "thankful ",   "those ",   "to ",   "of ",      "it ",         "Einstein\n"  },
+		{  "for ",        "who ",     "me. ",  "them ",    R"(myself.")",               },
+	}};
+
+	for (const auto& pp : wordset)
+	{
+		fiber ([](const auto& words)
+		{
+			for (auto qq : words)
+			{
+				std::cout << qq;
+				this_fiber::yield();
+			}
+		}, pp).detach();
+	}
 
    return 0;
 }
@@ -570,16 +573,13 @@ int main()
       );
    }).join();
 
-   std::thread([]()
-   {
-      launch_all_with_params // will print in specified order
-      (
-         fiber_params{.launch_order=0}, std::bind(func, wordset[0]),
-         fiber_params{.launch_order=3}, std::bind(func, wordset[1]),
-         fiber_params{.launch_order=1}, std::bind(func, wordset[2]),
-         fiber_params{.launch_order=2}, std::bind(func, wordset[3])
-      );
-   }).join();
+	launch_all_with_params // will print in specified order
+	(
+		fiber_params{.launch_order=0}, std::bind(func, wordset[0]),
+		fiber_params{.launch_order=3}, std::bind(func, wordset[1]),
+		fiber_params{.launch_order=1}, std::bind(func, wordset[2]),
+		fiber_params{.launch_order=2}, std::bind(func, wordset[3])
+	);
 
    return 0;
 }
@@ -719,7 +719,7 @@ void sub(int arg, int spacer)
 int main()
 {
    int ii{};
-   for (fiber myfiber({.name="sub"}, &sub, 10, 1); myfiber; this_fiber::yield())
+   for (fiber myfiber({"sub"}, &sub, 10, 1); myfiber; this_fiber::yield())
    {
       std::cout << "main: " << ++ii << '\n';
       if (ii == 9)
@@ -811,7 +811,7 @@ void doit()
 
 int main(int argc, char *argv[])
 {
-   fiber_ptr fb { argc > 1 ? make_fiber({.name="fiber"}, &doit) : make_fiber<jfiber>({.name="jfiber"}, &doit) };
+   fiber_ptr fb { argc > 1 ? make_fiber({"fiber"}, &doit) : make_fiber<jfiber>({"jfiber"}, &doit) };
    this_fiber::yield();
    fibers::print();
    std::cout << "Exiting from main\n";
@@ -893,10 +893,10 @@ void sub(int arg)
 
 int main(void)
 {
-   fiber f0({.name="first"}, &sub, 10), f2({.name="second"}, &sub, 10);
+   fiber f0({"first"}, &sub, 10), f2({"second"}, &sub, 10);
    std::thread t1([]()
    {
-      jfiber ft1({.name="thread:first"}, &sub, 10);
+      jfiber ft1({"thread:first"}, &sub, 10);
       for (int ii{}; fibers::has_fibers(); ++ii)
       {
          std::cout << "main1 " << ii << '\n';
@@ -1047,12 +1047,12 @@ $
 This example creates 6 fibers:
 | **Var** | **Type** | **Description** | **Parameters** |
 --|--|--|--
-| sub_co | function | Creates fiber with stacksz=2048 calling function `void doit(int arg)` | 3 |
-| sub_co1 | member function | Creates fiber with stacksz=16384 calling `void foo::sub2()` | sub2 calls `doit(4)` |
-| sub_co2 | member function | Creates fiber with stacksz=32768 calling `void foo::sub(int arg)` | 5 |
-| sub_co3 | member function | Creates fiber with stacksz=8192 calling `void foo::sub1(int arg, const char *str)` | 8.0, "hello"|
-| sub_co4 | member function | Creates fiber calling `void foo::sub3(int arg, const char *str)` | 12, "there"|
-| sub_lam | lambda | Creates fiber named "sub lambda" with mapped stack with default stacksz calling supplied lambda | 15 |
+| `sub_co` | function | Creates fiber with stacksz=2048 calling function `void doit(int arg)` | `3` |
+| `sub_co1` | member function | Creates fiber with stacksz=16384 calling `void foo::sub2()` | `sub2` calls `doit(4)` |
+| `sub_co2` | member function | Creates fiber with stacksz=32768 calling `void foo::sub(int arg)` | `5` |
+| `sub_co3` | member function | Creates fiber with stacksz=8192 calling `void foo::sub1(int arg, const char *str)` | `8.0`, "hello"|
+| `sub_co4` | member function | Creates fiber calling `void foo::sub3(int arg, const char *str)` | `12`, "there"|
+| `sub_lam` | lambda | Creates fiber named "sub lambda" with mapped stack with default stacksz calling supplied lambda | `15` |
 
 Once the fibers have been created, the main loop begins. Each iteration simply yields, allowing one of the fibers to execute. The `has_fibers` function
 returns true if any runnable fibers are available. Note that the first iteration performs some specific action - calling print then switching to `sub_co3`. When control
@@ -1066,7 +1066,7 @@ Each of the fibers prints a start message and loops for a different number of ti
 finally printing a leaving message before finishing. Main similarly prints each iteration.
 
 In fiber `sub_co4`, the fiber is suspended for 100ms each loop. This means that other fibers will get a larger share of the available cpu.
-Eventually only this fiber is left running as can be seen by the sub12 messages.
+Eventually only this fiber is left running as can be seen by the `sub12` messages.
 
 The sizes of various objects are printed at the end.
 
@@ -1082,7 +1082,7 @@ using namespace std::literals;
 
 void doit(int arg)
 {
-   std::cout << this_fiber::name(("sub"s + std::to_string(arg)).c_str());
+   std::cout << this_fiber::name("sub"s + std::to_string(arg));
    std::cout << "\tstarting " << arg << '\n';
    for (int ii{}; ii < arg; )
    {
@@ -1107,7 +1107,7 @@ struct foo
    void sub3(int arg, const char *str)
    {
       auto st { "sub"s + std::to_string(arg) };
-      this_fiber::name(st.c_str());
+      this_fiber::name(st);
       std::cout << "\tsub2 starting " << arg << '\n';
       for (int ii{}; ii < arg; )
       {
@@ -1317,12 +1317,12 @@ $
 </p>
 </details>
 
-## 11. Example from Dilwar's blog "An Example of Boost Fiber"
+## 11. Example from Dilawar's blog "An Example of Boost Fiber"
 The following example is based on [Dilawar's Blog](https://dilawar.github.io/posts/2021/2021-11-14-example-boost-fiber/). The following description is also based on the text in the blog.
 
->The program has two lambdas: print_a prints a and print_b prints b and then launches a thread that prints B (in detached mode).
+>The program has two lambdas: `print_a` prints a and `print_b` prints b and then launches a thread that prints B (in detached mode).
 We created a shared variable ii initialized to 0. We use this a global state. We create two detached fibers.
-First one keeps calling print_a till `ii < 20`. Similarly, the second one loops on print_b till `ii < 20`. Both increment ii by 1. When `ii = 20`, both fibers should be able to join.
+First one keeps calling `print_a` till `ii < 20`. Similarly, the second one loops on `print_b` till `ii < 20`. Both increment ii by 1. When `ii = 20`, both fibers should be able to join.
 Let’s guess the output of this program. It is most likely to be the same as if std::threads were used instead of fiber.
 X is printed first? Yes. Note that `detach()` is called on each fibers so neither of their functions are called. They are put in the background.
 
@@ -1330,11 +1330,11 @@ X is printed first? Yes. Note that `detach()` is called on each fibers so neithe
 In fact, you can put more computations after the `std::cout << 'X';` statement and it would be computed before any fiber is called.
 As soon as we try to return from the main, fiber manager is asked to join the fibers. The first fiber awakes, a is printed and the fiber yields the control to the manager.
 Fiber manager then wakes up the second fiber (who was waiting in the queue) that prints b and also launched a thread in the background that prints B.
-We can not be sure if B will be printed immediately after the b (it is a std::thread). print_b yields the control and goes to sleep.
-The fiber manager wakes up first fiber again that calls print_a again and a is printed and so on. Note that ii is also incremented every time either of the fibers are called.
+We can not be sure if B will be printed immediately after the b (it is a std::thread). `print_b` yields the control and goes to sleep.
+The fiber manager wakes up first fiber again that calls `print_a` again and a is printed and so on. Note that ii is also incremented every time either of the fibers are called.
 When ii hits 20, both fibers terminates and joined and the main function return 0;.
 
->So we have print_a called 10 times and print_b is also called 10 times. In the output, we should have 10 as, 10 bs and 10 Bs. B may not strictly follow b but b must come after the a.
+>So we have `print_a` called 10 times and `print_b` is also called 10 times. In the output, we should have 10 a's, 10 b's and 10 B's. B may not strictly follow b but b must come after the a.
 Note that the location of B is not deterministic.
 
 <details><summary><i>source</i></summary>

@@ -58,7 +58,7 @@ int main(int argc, char *argv[])
    bool flag{};
 
    std::cout << "flag=" << std::boolalpha << flag << '\n';
-   fiber f0({.name="\tfunc"}, [](bool& flag, int cnt)
+   fiber f0({"\tfunc"}, [](bool& flag, int cnt)
 	{
 		tell wrp1;
 		fibers::print();

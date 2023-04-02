@@ -71,16 +71,13 @@ int main()
 		);
 	}).join();
 
-	std::thread([]()
-	{
-		launch_all_with_params // will print in specified order
-		(
-			fiber_params{.launch_order=0}, std::bind(func, wordset[0]),
-			fiber_params{.launch_order=3}, std::bind(func, wordset[1]),
-			fiber_params{.launch_order=1}, std::bind(func, wordset[2]),
-			fiber_params{.launch_order=2}, std::bind(func, wordset[3])
-		);
-	}).join();
+	launch_all_with_params // will print in specified order
+	(
+		fiber_params{.launch_order=0}, std::bind(func, wordset[0]),
+		fiber_params{.launch_order=3}, std::bind(func, wordset[1]),
+		fiber_params{.launch_order=1}, std::bind(func, wordset[2]),
+		fiber_params{.launch_order=2}, std::bind(func, wordset[3])
+	);
 
 	return 0;
 }

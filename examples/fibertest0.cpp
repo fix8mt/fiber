@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
 {
    std::cout << "main:entry\n";
    bool flags{};
-   fiber f0({.name="func"}, &func, std::ref(flags), 5);
+   fiber f0({"func"}, &func, std::ref(flags), 5);
    std::cout << "flags=" << std::boolalpha << flags << '\n';
 
    for (int ii{}; f0; ++ii)

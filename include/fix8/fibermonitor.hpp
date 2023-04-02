@@ -153,13 +153,8 @@ public:
 			{
 				update_row(y++, pos++, true, *vs->_curr);
 				for (const auto& pp : vs->_sched) // scheduled
-					update_row(y++, pos++, false, *pp);
-				if (vs->_gflags[static_cast<int>(global_fiber_flags::showdetached)])
-				{
-					pos = 0;
-					for (const auto& pp : vs->_det) // detached (shown with -ve #)
-						update_row(y++, --pos, false, *pp);
-				}
+					if (pp->is_detached() ? !vs->_gflags[static_cast<int>(global_fiber_flags::hidedetached)] : true)
+						update_row(y++, pos++, false, *pp);
 			}
 			else if (_mode == by_id)
 				for (const auto& pp : vs->_uniq) // all fibers

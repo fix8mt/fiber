@@ -31,30 +31,34 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 #
-# CXX="clang++ -ggdb" CC="clang -ggdb" cmake  ..
-# CXX="g++ -ggdb" CC="gcc -ggdb" cmake  ..
+# ----------------------------------------------------------------------------------------
+# cmake config
+#	clang
+#		CXX="clang++ -ggdb" CC="clang -ggdb" cmake ..
+#	gcc
+#		CXX="g++ -ggdb" CC="gcc -ggdb" cmake ..
 # ----------------------------------------------------------------------------------------
 cmake_minimum_required (VERSION 3.8)
-enable_language(CXX)
+project (f8fiber LANGUAGES CXX VERSION 2.1)
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
-project (f8fiber VERSION 2.0)
+set(CMAKE_CXX_STANDARD_REQUIRED true)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
-
+link_libraries(Threads::Threads)
 include_directories(${CMAKE_SOURCE_DIR}/include)
+
 set(exdir ${CMAKE_SOURCE_DIR}/examples)
 file(GLOB esrc CONFIGURE_DEPENDS "${exdir}/fiber*.cpp")
 foreach(x ${esrc})
 	get_filename_component(fn ${x} NAME_WLE)
 	add_executable(${fn} ${x})
-	target_link_libraries(${fn} PRIVATE Threads::Threads)
 endforeach()
 
 # to disable building monitor tests:
 # cmake -DBUILD_MONITOR=false ..
 option(BUILD_MONITOR "enable building monitor tests" true)
+message("-- Build monitor tests: ${BUILD_MONITOR}")
 if(BUILD_MONITOR)
 	include(ExternalProject)
 	ExternalProject_Add(termbox2
@@ -89,7 +93,31 @@ if(BUILD_MONITOR)
 		add_dependencies(${fn} termbox2 gmp)
 		target_include_directories(${fn} PRIVATE ${termbox2} ${gmp})
 		target_link_directories(${fn} PRIVATE ${termbox2} ${gmp}/.libs)
-		target_link_libraries(${fn} PRIVATE termbox.a gmpxx.a gmp.a Threads::Threads)
+		target_link_libraries(${fn} PRIVATE termbox.a gmpxx.a gmp.a)
 	endforeach()
+endif()
+
+# to disable building unit tests:
+# cmake -DBUILD_TESTS=false ..
+option(BUILD_TESTS "enable building unit tests" true)
+message("-- Build unit tests: ${BUILD_TESTS}")
+if(BUILD_TESTS)
+	enable_testing()
+	include(FetchContent)
+	FetchContent_Declare(Catch2
+		GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+		GIT_TAG        v3.0.1 # or a later release
+	)
+	FetchContent_MakeAvailable(Catch2)
+	list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
+	include(Catch)
+
+	set(testdir ${CMAKE_SOURCE_DIR}/test)
+	add_executable(utest01 ${testdir}/utest01.cpp)
+	target_link_libraries(utest01 PRIVATE Catch2::Catch2WithMain)
+	catch_discover_tests(utest01)
+	add_executable(utest02 ${testdir}/utest02.cpp)
+	target_link_libraries(utest02 PRIVATE Catch2::Catch2)
+	catch_discover_tests(utest02)
 endif()
 

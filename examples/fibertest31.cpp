@@ -41,27 +41,31 @@
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
+using namespace std::literals;
 
 //-----------------------------------------------------------------------------------------
 struct foo : fiber
 {
-	constexpr foo(fiber_params&& fp) : fiber(std::move(fp), [this]()
+	int _num;
+	constexpr foo(fiber_params&& fp, int num=5) : fiber(std::move(fp), &foo::sub, this), _num(num) {}
+
+	void sub()
 	{
-		std::cout << "\tstarting " << name() << '\n';
-		for (int ii{}; ii < 5; this_fiber::yield())
-			std::cout << '\t' << name() << ": " << std::dec << ++ii << '\n';
-		fibers::print();
-		std::cout << "\tleaving " << name() << '\n';
-	}) {}
+		std::cout << "\tstarting " << this_fiber::name() << '\n';
+		for (int ii{}; ii < _num; this_fiber::yield())
+			std::cout << '\t' << this_fiber::name() << ": " << std::dec << ++ii << '\n';
+		std::cout << "\tleaving " << this_fiber::name() << '\n';
+	}
 };
 
 //-----------------------------------------------------------------------------------------
 int main(void)
 {
-	foo sub_co({"sub_co"}), sub_co1({"sub_co1"}), sub_co2({"sub_co2"});
+	foo sub_co({"sub_co"}), sub_co1({"sub_co1"}), sub_co2({"sub_co2s"}, 6), sub_co3({"sub_co3s"}, 10);
+	sub_co2.detach();
+	sub_co3.detach();
 	for (int ii{}; fibers::has_fibers(); this_fiber::yield())
-		std::cout << "main: " << ++ii << '\n';
-	std::cout << "exiting main\n";
-	fibers::print();
+		std::cout << "main: " << std::dec << ++ii << '\n';
+	std::cout << "Exiting from main\n";
 	return 0;
 }
