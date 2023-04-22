@@ -327,7 +327,7 @@ public:
 //-----------------------------------------------------------------------------------------
 template<typename T=f8_fixedsize_heap_stack, typename... Args>
 requires std::derived_from<T, f8_stack>
-f8_stack_ptr make_stack(Args&&... args)
+constexpr f8_stack_ptr make_stack(Args&&... args)
 {
 	return f8_stack_ptr{new T(std::forward<Args>(args)...)};
 }
@@ -335,7 +335,7 @@ f8_stack_ptr make_stack(Args&&... args)
 enum class stack_type { heap, mapped, placement };
 
 template<stack_type type, typename... Args>
-f8_stack_ptr make_stack(Args&&... args)
+constexpr f8_stack_ptr make_stack(Args&&... args)
 {
 	using enum stack_type;
 	if constexpr (type == heap)
@@ -1337,14 +1337,14 @@ constexpr void launch_all_with_params_n(C& c, Ps&& params, Fn&& func, Fns&& ...f
 
 template<typename T=fiber, typename... Args>
 requires std::derived_from<T, fiber>
-fiber_ptr make_fiber(Args&&... args)
+constexpr fiber_ptr make_fiber(Args&&... args)
 {
 	return fiber_ptr(new T(std::forward<Args>(args)...));
 }
 
 template<typename T=fiber, typename... Args>
 requires std::derived_from<T, fiber>
-fiber_ptr make_fiber(fiber_params&& params, Args&&... args)
+constexpr fiber_ptr make_fiber(fiber_params&& params, Args&&... args)
 {
 	return fiber_ptr(new T(std::forward<fiber_params>(params), std::forward<Args>(args)...));
 }

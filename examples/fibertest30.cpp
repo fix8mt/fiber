@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 	uint64_t val;
-	fiber(fibonacci<uint64_t>, std::ref(val)).detach();
+	fiber(fibonacci<decltype(val)>, std::ref(val)).detach();
 
 	while (num--)
 	{

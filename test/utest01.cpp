@@ -114,13 +114,13 @@ TEST_CASE("Task - with std::future and std::packaged_task", "[fiber][task]")
 //-----------------------------------------------------------------------------------------
 TEST_CASE("Wordset - fiber reconstructing sentence", "[fiber][launch_all_with_params_n]")
 {
-	static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
-	{{
-		{	R"("I )",		"all ",		"said ",		"It’s ",		"I’m ",								},
-		{	"for ",			"who ",		"me. ",		"them ",		"myself.\"\n"						},
-		{	"am ",			"of ",		"no ",		"because ",	"doing ",		" - Albert ",	},
-		{	"thankful ",	"those ",	"to ",		"of ",		"it ",			"Einstein\n"	},
-	}};
+	static constexpr const std::array wordsets
+	{
+		std::array { R"("I )",		"all ",		"said ",		"It’s ",		"I’m ",			""					},
+		std::array { "for ",			"who ",		"me. ",		"them ",		"myself.\"\n",	""					},
+		std::array { "am ",			"of ",		"no ",		"because ",	"doing ",		" - Albert ",	},
+		std::array { "thankful ",	"those ",	"to ",		"of ",		"it ",			"Einstein\n"	},
+	};
 	static const std::string_view cmpstr { R"("I am thankful for all of those who said no to me. It’s because of them I’m doing it myself."
  - Albert Einstein
 )"};
@@ -141,10 +141,10 @@ TEST_CASE("Wordset - fiber reconstructing sentence", "[fiber][launch_all_with_pa
 	launch_all_with_params_n
 	(
 	 	sts,
-		fiber_params{.launch_order=0}, std::bind(func, wordset[0]),
-		fiber_params{.launch_order=3}, std::bind(func, wordset[1]),
-		fiber_params{.launch_order=1}, std::bind(func, wordset[2]),
-		fiber_params{.launch_order=2}, std::bind(func, wordset[3])
+		fiber_params{.launch_order=0}, std::bind(func, wordsets[0]),
+		fiber_params{.launch_order=3}, std::bind(func, wordsets[1]),
+		fiber_params{.launch_order=1}, std::bind(func, wordsets[2]),
+		fiber_params{.launch_order=2}, std::bind(func, wordsets[3])
 	);
 
 	REQUIRE(ostr.str() == cmpstr);

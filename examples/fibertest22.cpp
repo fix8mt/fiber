@@ -39,16 +39,42 @@
 using namespace FIX8;
 
 //-----------------------------------------------------------------------------------------
+using uint128_t = __uint128_t;
+
+std::ostream& operator<<(std::ostream& os, const uint128_t val) noexcept
+{
+	if (std::ostream::sentry sent(os); sent)
+	{
+		uint128_t tmp { val < 0 ? -val : val };
+		std::array<char, 128> buffer;
+		auto blen { std::end(buffer) };
+		do
+		{
+			static constexpr const std::string_view vnum {"0123456789"};
+			*--blen = vnum[tmp % 10];
+			tmp /= 10;
+		}
+		while (tmp);
+		if (val < 0)
+			*--blen = '-';
+		if (auto len { std::end(buffer) - blen }; os.rdbuf()->sputn(blen, len) != len)
+			os.setstate(std::ios_base::badbit);
+	}
+	return os;
+}
+
+//-----------------------------------------------------------------------------------------
+template<typename T>
 class foo
 {
-	std::queue<long> _queue;
+	std::queue<T> _queue;
    fiber _produce, _consume;
 
    void producer(int numtogen)
    {
 		std::cout << "\tproducer:entry (id:" << this_fiber::get_id() << ")\n";
 		std::mt19937_64 rnde {std::random_device{}()};
-		auto dist{std::uniform_int_distribution<long>(1, std::numeric_limits<long>().max())};
+		auto dist{std::uniform_int_distribution<T>(1, std::numeric_limits<T>().max())};
       for (; numtogen; --numtogen)
       {
 			int cnt{};
@@ -93,7 +119,7 @@ int main(int argc, char *argv[])
    std::cout << "main:entry\n";
 	try
 	{
-		foo(argc > 1 ? std::stoi(argv[1]) : 10);
+		foo<uint128_t>(argc > 1 ? std::stoi(argv[1]) : 10);
 	}
 	catch (const std::exception& e)
 	{

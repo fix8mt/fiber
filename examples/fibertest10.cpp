@@ -32,7 +32,6 @@
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
 #include <iostream>
-#include <string_view>
 #include <array>
 #include <fix8/fiber.hpp>
 
@@ -42,13 +41,13 @@ using namespace FIX8;
 //-----------------------------------------------------------------------------------------
 int main()
 {
-	static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
-	{{
-		{	R"("I )",		"all ",		"said ",	"It’s ",		"I’m ",			"\n – ",			},
-		{	"am ",			"of ",		"no ",	"because ",	"doing ",		"Albert ",		},
-		{	"thankful ",	"those ",	"to ",	"of ",		"it ",			"Einstein\n"	},
-		{	"for ",			"who ",		"me. ",	"them ",		R"(myself.")",						},
-	}};
+	static constexpr const std::array wordset
+	{
+		std::array { R"("I)",		"all",	"said",	"It’s",		"I’m",			"\n –",			},
+		std::array { "am",			"of",		"no",		"because",	"doing",			"Albert",		},
+		std::array { "thankful",	"those",	"to",		"of",			"it",				"Einstein\n"	},
+		std::array { "for",			"who",	"me.",	"them",		R"(myself.")",	""					},
+	};
 
 	for (const auto& pp : wordset)
 	{
@@ -56,7 +55,7 @@ int main()
 		{
 			for (auto qq : words)
 			{
-				std::cout << qq;
+				std::cout << qq << ' ';
 				this_fiber::yield();
 			}
 		}, pp).detach();

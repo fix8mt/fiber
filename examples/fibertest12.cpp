@@ -32,7 +32,6 @@
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
 #include <iostream>
-#include <string_view>
 #include <array>
 #include <utility>
 #include <fix8/fiber.hpp>
@@ -43,13 +42,13 @@ using namespace FIX8;
 //-----------------------------------------------------------------------------------------
 int main()
 {
-	static constexpr const std::array<std::array<std::string_view, 6>, 4> wordset
-	{{
-		{	R"("I )",		"all ",		"said ",		"It’s ",		"I’m ",								},
-		{	"for ",			"who ",		"me. ",		"them ",		"myself.\"\n"						},
-		{	"am ",			"of ",		"no ",		"because ",	"doing ",		" - Albert ",	},
-		{	"thankful ",	"those ",	"to ",		"of ",		"it ",			"Einstein\n"	},
-	}};
+	static constexpr const std::array wordsets
+	{
+		std::array { R"("I )",		"all ",		"said ",		"It’s ",		"I’m ",			""					},
+		std::array { "for ",			"who ",		"me. ",		"them ",		"myself.\"\n",	""					},
+		std::array { "am ",			"of ",		"no ",		"because ",	"doing ",		" - Albert ",	},
+		std::array { "thankful ",	"those ",	"to ",		"of ",		"it ",			"Einstein\n"	},
+	};
 
 	static const auto func([](const auto& words)
 	{
@@ -64,19 +63,19 @@ int main()
 	{
 		launch_all // will print in fiber work order
 		(
-			std::bind(func, wordset[0]),
-			std::bind(func, wordset[1]),
-			std::bind(func, wordset[2]),
-			std::bind(func, wordset[3])
+			std::bind(func, wordsets[0]),
+			std::bind(func, wordsets[1]),
+			std::bind(func, wordsets[2]),
+			std::bind(func, wordsets[3])
 		);
 	}).join();
 
 	launch_all_with_params // will print in specified order
 	(
-		fiber_params{.launch_order=0}, std::bind(func, wordset[0]),
-		fiber_params{.launch_order=3}, std::bind(func, wordset[1]),
-		fiber_params{.launch_order=1}, std::bind(func, wordset[2]),
-		fiber_params{.launch_order=2}, std::bind(func, wordset[3])
+		fiber_params{.launch_order=0}, std::bind(func, wordsets[0]),
+		fiber_params{.launch_order=3}, std::bind(func, wordsets[1]),
+		fiber_params{.launch_order=1}, std::bind(func, wordsets[2]),
+		fiber_params{.launch_order=2}, std::bind(func, wordsets[3])
 	);
 
 	return 0;

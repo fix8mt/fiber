@@ -58,7 +58,7 @@ int main(void)
 	std::array<fiber, 12> fbs
 	{{
 		{ {.name="sub01",.stacksz=8192}, &func, 3 },
-		{ {.name="sub02",.stacksz=8192}, &func, 6 },
+		{ {"sub02",99,false,8192}, &func, 6 },
 		{ {.name="sub03",.stacksz=8192}, &func, 9 },
 		{ {.name="sub04",.stacksz=8192}, &func, 12 },
 		{ {.name="sub05",.stacksz=8192,.stack=make_stack<stack_type::placement>(stack_memory.get())}, &func, 3 },
