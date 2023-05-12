@@ -37,7 +37,7 @@ Currently only `Linux/x86_64` is supported. Other platforms to be supported in t
 - no external dependencies
 - simplicity, lightweight
 - make use of C++20 features
-- constexpr where possible
+- `constexpr` where possible
 - expand and improve interface
 
 ## Features
