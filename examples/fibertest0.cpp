@@ -41,32 +41,32 @@ using namespace FIX8;
 
 void func (bool& flags, int cnt)
 {
-	std::cout << "\tfunc:entry (fiber id:" << this_fiber::get_id() << ")\n";
+	std::cout << '\t' << this_fiber::name() << ":entry (fiber id:" << this_fiber::get_id() << ")\n";
 	for (int kk{}; kk < cnt; ++kk)
 	{
-		std::cout << "\tfunc:" << kk << '\n';
+		std::cout << '\t' << this_fiber::name() << ':' << kk << '\n';
 		this_fiber::yield();
-		std::cout << "\tfunc:" << kk << " (resumed)\n";
+		std::cout << '\t' << this_fiber::name() << ':' << kk << " (resumed)\n";
 	}
 	flags = true;
 	fibers::print();
-	std::cout << "\tfunc:exit\n";
+	std::cout << '\t' << this_fiber::name() << ":exit\n";
 }
 
 int main(int argc, char *argv[])
 {
-   std::cout << "main:entry\n";
+	std::cout << this_fiber::name() << ":entry (fiber id:" << this_fiber::get_id() << ")\n";
    bool flags{};
    fiber f0({"func"}, &func, std::ref(flags), 5);
    std::cout << "flags=" << std::boolalpha << flags << '\n';
 
    for (int ii{}; f0; ++ii)
    {
-      std::cout << "main:" << ii << '\n';
+      std::cout << this_fiber::name() << ':' << ii << '\n';
       this_fiber::yield();
-      std::cout << "main:" << ii << " (resumed)\n";
+      std::cout << this_fiber::name() << ':' << ii << " (resumed)\n";
    }
    std::cout << "flags=" << std::boolalpha << flags << '\n';
-   std::cout << "main:exit\n";
+	std::cout << this_fiber::name() << ":exit\n";
    return 0;
 }

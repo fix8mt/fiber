@@ -53,6 +53,7 @@
 #include <string_view>
 #include <functional>
 #include <stdexcept>
+#include <ranges>
 #include <bitset>
 #include <mutex>
 #include <utility>
@@ -994,6 +995,87 @@ public:
 
 	template<std::invocable Fn>
 	constexpr jfiber(fiber_params&& params, Fn&& func) : fiber(std::move(params), std::move(func)) { set_joinonexit(); }
+};
+
+//-----------------------------------------------------------------------------------------
+template<std::invocable Fn, typename... Args>
+class generator final : public std::ranges::view_interface<generator<Fn, Args ...>>
+{
+	using value = std::invoke_result_t<std::decay_t<Fn>, std::decay_t<Args>...>;
+	class iterator;
+	//using value = conditional_t<is_void_v<V>, remove_cvref_t<Ref>, V>;  // exposition only
+	//using reference = conditional_t<is_void_v<V>, Ref&&, Ref>;
+
+protected:
+	fiber _fiber;
+
+public:
+	using promise_type = std::promise<value>;
+	promise_type _promise;
+
+	constexpr generator(Fn&& func, Args&&... args)
+		: _fiber(std::forward<Fn>(func), std::forward<Args>(args)...) {}
+
+	constexpr generator(fiber_params&& params, Fn&& func, Args&&... args)
+		: _fiber(std::move(params), std::forward<Fn>(func), std::forward<Args>(args)...) {}
+
+	constexpr generator(Fn&& func) : _fiber(std::forward<Fn>(func)) {}
+
+	constexpr generator(fiber_params&& params, Fn&& func) : _fiber(std::move(params), std::move(func)) {}
+
+	template <std::convertible_to<promise_type> From>
+	void yield(From&& from) noexcept
+	{
+		_promise.set_value(std::forward<From>(from));
+		f8_this_fiber::yield();
+	}
+/*
+	class iterator
+	{
+		using value_type = value;
+		 using difference_type = ptrdiff_t;
+
+    iterator(iterator&& other) noexcept;
+    iterator& operator=(iterator&& other) noexcept;
+
+    reference operator*() const noexcept(is_nothrow_copy_constructible_v<reference>);
+    iterator& operator++();
+    void operator++(int);
+
+    friend bool operator==(const iterator& i, default_sentinel_t);
+
+  private:
+    coroutine_handle<promise_type> coroutine_; // exposition only
+
+
+
+
+		iterator::iterator(iterator&& other) noexcept;
+		//Initializes coroutine_ with std::exchange(other.coroutine_, {});.
+
+		iterator& operator=(iterator&& other) noexcept;
+		//Equivalent to coroutine_ = std::exchange(other.coroutine_, {});.
+		//Returns: *this.
+
+		std::generator::iterator::operator*
+		reference operator*() const
+			 noexcept( std::is_nothrow_copy_constructible_v<reference> );
+		(since C++23)
+		Let reference be the std::generator's underlying type.
+		Let for some generator object x its coroutine_ be in the stack *x.active_.
+		Let x.active_->top() refer to a suspended coroutine with promise object p.
+		Equivalent to return static_cast<reference>(*p.value_);.
+
+
+		std::generator::iterator::operator++
+		constexpr iterator& operator++();
+		constexpr void operator++(int);
+		operator==(iterator)
+		friend bool operator==(const& i, std::default_sentinel_t);
+	} */
+
+	iterator begin();
+	std::default_sentinel_t end() const noexcept;
 };
 
 //-----------------------------------------------------------------------------------------

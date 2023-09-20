@@ -36,7 +36,7 @@
 
 //----------------------------------------------------------------------------------------
 #include <cctype>
-#include <termbox.h>
+#include <termbox2.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 

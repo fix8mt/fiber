@@ -42,7 +42,7 @@ using namespace FIX8;
 struct foo
 {
 	int _a;
-	foo(int a) : _a(a) { std::cout << "foo(" << _a << ",&_a=" << &_a << ")\n"; }
+	foo(int a) : _a(a) { std::cout << "foo(" << _a << ",this=" << this << ")\n"; }
 	~foo() { std::cout << "~foo(" << _a << ")\n"; }
 };
 

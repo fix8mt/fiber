@@ -37,7 +37,7 @@ Currently only `Linux/x86_64` is supported. Other platforms to be supported in t
 - no external dependencies
 - simplicity, lightweight
 - make use of C++20 features
-- constexpr where possible
+- `constexpr` where possible
 - expand and improve interface
 
 ## Features
@@ -163,7 +163,7 @@ The following example implements a simple [generator](https://en.wikipedia.org/w
 
 Both the `producer()` and `consumer()` methods of `foo` are passed as callable objects to the `fiber` members `_produce` and `_consume`.
 
-Note that the fiber ctor requires `this` for pointer to member functions. Also note the additonal parameter `num` passed to `_produce`. Your callable object definition
+Note that the fiber ctor requires `this` for pointer to member functions. Also note the additional parameter `num` passed to `_produce`. Your callable object definition
 must match the parameters passed to fiber.
 
 After construction of the fibers, the `foo` ctor calls `_produce.resume()` which immediately switches to `producer()`.
@@ -304,7 +304,7 @@ Each component of the message is read using the method `read_some()`
 which will randomly choose to _not_ fully complete a read (50% of the time), randomly reading some count less than requested. Reading will continue, yielding to
 the caller when insufficient data is available.
 
-`read_some()` will also randomnly throw a `std::runtime_error`. `read_nb()` catches any exception and assigns it to a `std::exception_ptr`. If
+`read_some()` will also randomly throw a `std::runtime_error`. `read_nb()` catches any exception and assigns it to a `std::exception_ptr`. If
 an exception is caught, the method will not attempt to read any more messages, exiting the fiber and returning to `main`. When control is
 returned, `main` checks for a non-empty `std::exception_ptr` and rethrows the stored exception. `main` will continue to yield to the reader
 (`resume()`) while the reader fiber is still running (`while (reader)`).
@@ -363,17 +363,17 @@ class Reader : public fiber
          {
             auto hlen{ _hdrdist(_rnd_engine) }, mlen{ _mlendist(_rnd_engine) }; // variable header and body length
 
-            // read header(var length), yield if nothing or insufficent to read
+            // read header(var length), yield if nothing or insufficient to read
             for (int sofar{}; (sofar += read_some(buff.data() + sofar, hlen - sofar)) < hlen;)
                this_fiber::yield();
             buff[hlen++] = ' '; // separator
 
-            // read body(var length), yield if nothing or insufficent to read
+            // read body(var length), yield if nothing or insufficient to read
             for (int sofar{}; (sofar += read_some(buff.data() + hlen + sofar, mlen - sofar)) < mlen;)
                this_fiber::yield();
             buff[hlen + mlen++] = ' '; // separator
 
-            // read trailer(fixed length), yield if nothing or insufficent to read
+            // read trailer(fixed length), yield if nothing or insufficient to read
             for (int sofar{}; (sofar += read_some(buff.data() + hlen + sofar + mlen, _trl_len - sofar)) < _trl_len;)
                this_fiber::yield();
 
@@ -1054,7 +1054,7 @@ This example creates 6 fibers:
 
 Once the fibers have been created, the main loop begins. Each iteration simply yields, allowing one of the fibers to execute. The `has_fibers` function
 returns true if any runnable fibers are available. Note that the first iteration performs some specific action - calling print then switching to `sub_co3`. When control
-finally returns to main another print is performed. Examining the two print outputs reveals the changes that have occured in the fiber manager. Also
+finally returns to main another print is performed. Examining the two print outputs reveals the changes that have occurred in the fiber manager. Also
 note that since `sub_co3` is the first fiber to actually execute, you can see the string `hello` printed followed by `sub8` (which is the number of
 iterations that `sub_co3` will perform).
 

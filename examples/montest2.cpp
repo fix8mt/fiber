@@ -139,7 +139,9 @@ int main(int argc, char *argv[])
   -p show percent remaining work (default )" << std::boolalpha << percent << R"()
   -f fiber count (default )" << fcnt_default << R"()
   -m max exponent (default )" << maxexp_default << R"()
-  -h help)" << std::endl;
+  -h help
+e.g.
+  ./montest1 --mode 8 --retain --interval 0 --sleep 25)" << std::endl;
 			  return 0;
 			case 'w': todisk ^= true; break;
 			case 'p': percent ^= true; break;

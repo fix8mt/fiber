@@ -34,25 +34,46 @@
 # ----------------------------------------------------------------------------------------
 # cmake config
 #	clang
-#		CXX="clang++ -ggdb" CC="clang -ggdb" cmake ..
+#		CXX="clang++" CC="clang" cmake ..
 #	gcc
-#		CXX="g++ -ggdb" CC="gcc -ggdb" cmake ..
+#		CXX="g++" CC="gcc" cmake ..
+#
+# min cmake version 3.20 (Mar 24, 2021)
 # ----------------------------------------------------------------------------------------
-cmake_minimum_required (VERSION 3.8)
-project (f8fiber LANGUAGES CXX VERSION 2.1)
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED true)
+cmake_minimum_required (VERSION 3.20)
+project (fiber
+	LANGUAGES CXX
+	HOMEPAGE_URL https://github.com/fix8mt/fiber
+	DESCRIPTION "Lightweight header-only stackful per-thread C++20 fiber"
+	VERSION 2.3
+)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 link_libraries(Threads::Threads)
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
+if(CMAKE_BUILD_TYPE STREQUAL "")
+   set(CMAKE_BUILD_TYPE "RELEASE")
+endif()
+if (CMAKE_BUILD_TYPE STREQUAL "DEBUG")
+   set(CMAKE_CXX_FLAGS_DEBUG "-O0 -D_DEBUG -ggdb")
+   set(CMAKE_C_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG})
+else(CMAKE_BUILD_TYPE STREQUAL "RELEASE")
+   set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -ggdb")
+   set(CMAKE_C_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
+endif()
+message("-- cxx flags ${CMAKE_BUILD_TYPE}: \"${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE}}\"")
+
 set(exdir ${CMAKE_SOURCE_DIR}/examples)
 file(GLOB esrc CONFIGURE_DEPENDS "${exdir}/fiber*.cpp")
 foreach(x ${esrc})
-	get_filename_component(fn ${x} NAME_WLE)
-	add_executable(${fn} ${x})
+	cmake_path(GET x STEM LAST_ONLY target)
+	add_executable(${target} ${x})
+	set_target_properties(${target} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED true)
+	get_target_property(v1 ${target} CXX_STANDARD)
+	cmake_path(GET x FILENAME fname)
+	message("-- adding ${fname} cxx std: c++${v1}")
 endforeach()
 
 # to disable building monitor tests:
@@ -60,10 +81,12 @@ endforeach()
 option(BUILD_MONITOR "enable building monitor tests" true)
 message("-- Build monitor tests: ${BUILD_MONITOR}")
 if(BUILD_MONITOR)
+	message(STATUS "Populating termbox2...")
 	include(ExternalProject)
 	ExternalProject_Add(termbox2
 		GIT_REPOSITORY https://github.com/termbox/termbox2.git
 		GIT_PROGRESS true
+		GIT_SHALLOW	ON
 		GIT_TAG master
 		UPDATE_DISCONNECTED true
 		CONFIGURE_COMMAND ""
@@ -73,9 +96,11 @@ if(BUILD_MONITOR)
 	)
 	set(termbox2 ${CMAKE_CURRENT_BINARY_DIR}/termbox2-prefix/src/termbox2)
 
+	message(STATUS "Populating GMP...")
 	ExternalProject_Add(gmp
 		GIT_REPOSITORY https://github.com/alisw/GMP.git
 		GIT_PROGRESS true
+		GIT_SHALLOW	ON
 		GIT_TAG master
 		UPDATE_DISCONNECTED true
 		CONFIGURE_COMMAND sh -c "./configure --enable-cxx -enable-alloca=alloca"
@@ -88,12 +113,16 @@ if(BUILD_MONITOR)
 
 	file(GLOB msrc CONFIGURE_DEPENDS "${exdir}/montest*.cpp")
 	foreach(x ${msrc})
-		get_filename_component(fn ${x} NAME_WLE)
-		add_executable(${fn} ${x})
-		add_dependencies(${fn} termbox2 gmp)
-		target_include_directories(${fn} PRIVATE ${termbox2} ${gmp})
-		target_link_directories(${fn} PRIVATE ${termbox2} ${gmp}/.libs)
-		target_link_libraries(${fn} PRIVATE termbox.a gmpxx.a gmp.a)
+		cmake_path(GET x STEM LAST_ONLY target)
+		add_executable(${target} ${x})
+		set_target_properties(${target} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED true CXX_EXTENSIONS off)
+		add_dependencies(${target} termbox2 gmp)
+		target_include_directories(${target} PRIVATE ${termbox2} ${gmp})
+		target_link_directories(${target} PRIVATE ${termbox2} ${gmp}/.libs)
+		target_link_libraries(${target} PRIVATE termbox2.a gmpxx.a gmp.a)
+		get_target_property(v1 ${target} CXX_STANDARD)
+		cmake_path(GET x FILENAME fname)
+		message("-- adding ${fname} cxx std: c++${v1}")
 	endforeach()
 endif()
 
@@ -102,11 +131,13 @@ endif()
 option(BUILD_TESTS "enable building unit tests" true)
 message("-- Build unit tests: ${BUILD_TESTS}")
 if(BUILD_TESTS)
-	enable_testing()
+	message(STATUS "Populating Catch2...")
 	include(FetchContent)
+	enable_testing()
 	FetchContent_Declare(Catch2
 		GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-		GIT_TAG        v3.0.1 # or a later release
+		GIT_SHALLOW	ON
+		GIT_TAG devel
 	)
 	FetchContent_MakeAvailable(Catch2)
 	list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
@@ -117,7 +148,19 @@ if(BUILD_TESTS)
 	target_link_libraries(utest01 PRIVATE Catch2::Catch2WithMain)
 	catch_discover_tests(utest01)
 	add_executable(utest02 ${testdir}/utest02.cpp)
+	set_target_properties(utest01 utest02 PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED true)
 	target_link_libraries(utest02 PRIVATE Catch2::Catch2)
 	catch_discover_tests(utest02)
 endif()
 
+# to dump all non-empty cmake variables
+# cmake -DCMAKE_DUMP_VARS=true ..
+option(CMAKE_DUMP_VARS "dump all cmake vars" false)
+if(CMAKE_DUMP_VARS)
+	get_cmake_property(varname VARIABLES)
+	foreach (var ${varname})
+		if(NOT ${var} STREQUAL "")
+			message(STATUS "${var}=${${var}}")
+		endif()
+	endforeach()
+endif()
