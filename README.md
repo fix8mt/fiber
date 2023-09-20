@@ -71,44 +71,48 @@ In the following example each iteration of `main` and `func` simply yields, prin
 Note to pass a reference to the `flags` variable we need to use the `std::ref` wrapper. Before exiting `func` calls the built-in printer.
 When `func` exits, control returns to `main` where testing `f0` for non-zero returns false indicating the fiber has finished.
 
-Note that you can name a fiber using `fiber_params`.
+Note that you can name a fiber using `fiber_params`. The default name for the calling thread of a fiber is `main`.
 
 <details><summary><i>source</i></summary>
 <p>
 
 ```c++
+#include <iostream>
+#include <iomanip>
+#include <thread>
+#include <string>
 #include <fix8/fiber.hpp>
 using namespace FIX8;
 
-void func (bool& flags, int cnt)
+void func(bool& flags, int cnt)
 {
-   std::cout << "\tfunc:entry (id:" << this_fiber::get_id() << ")\n";
+   std::cout << '\t' << this_fiber::name() << " (fiber id:" << this_fiber::get_id() << ")\n";
    for (int kk{}; kk < cnt; ++kk)
    {
-      std::cout << "\tfunc:" << kk << '\n';
+      std::cout << '\t' << this_fiber::name() << ':' << kk << '\n';
       this_fiber::yield();
-      std::cout << "\tfunc:" << kk << " (resumed)\n";
+      std::cout << '\t' << this_fiber::name() << ':' << kk << " (resumed)\n";
    }
    flags = true;
    fibers::print();
-   std::cout << "\tfunc:exit\n";
+   std::cout << '\t' << this_fiber::name() << ":exit\n";
 }
 
 int main(int argc, char *argv[])
 {
-   std::cout << "main:entry\n";
-   bool flags{false};
+   std::cout << this_fiber::name() << ":entry (fiber id:" << this_fiber::get_id() << ")\n";
+   bool flags{};
    fiber f0({"func"}, &func, std::ref(flags), 5);
    std::cout << "flags=" << std::boolalpha << flags << '\n';
 
    for (int ii{}; f0; ++ii)
    {
-      std::cout << "main:" << ii << '\n';
+      std::cout << this_fiber::name() << ':' << ii << '\n';
       this_fiber::yield();
-      std::cout << "main:" << ii << " (resumed)\n";
+      std::cout << this_fiber::name() << ':' << ii << " (resumed)\n";
    }
    std::cout << "flags=" << std::boolalpha << flags << '\n';
-   std::cout << "main:exit\n";
+   std::cout << this_fiber::name() << ":exit\n";
    return 0;
 }
 ```
@@ -121,10 +125,10 @@ int main(int argc, char *argv[])
 
 ```bash
 $ ./fibertest0
-main:entry
+main:entry (fiber id:NaF)
 flags=false
 main:0
-        func:entry (id:2896)
+        func:entry (fiber id:2896)
         func:0
 main:0 (resumed)
 main:1
@@ -146,8 +150,8 @@ main:4 (resumed)
 main:5
         func:4 (resumed)
 #      fid  pfid prev   ctxs      stack ptr    stack alloc    depth  stacksz     flags ord name
-0    * 8576 NaF  NaF       6 0x7f9fb3632ea8 0x7f9fb3613010      352   131072 _________  99 func
-1      NaF  NaF  8576      6 0x7fff7628f8a8              0        0  8388608 m________  99 main
+0    * 2896 NaF  NaF       6 0x7f9fb3632ea8 0x7f9fb3613010      352   131072 _________  99 func
+1      NaF  NaF  2896      6 0x7fff7628f8a8              0        0  8388608 m________  99 main
         func:exit
 main:5 (resumed)
 flags=true
@@ -1348,7 +1352,7 @@ int main()
 {
    static int ii{};
 
-   fiber([]()
+   fiber([]() // print_a
    {
       do
       {
@@ -1358,7 +1362,7 @@ int main()
       while (++ii < 20);
    }).detach();
 
-   fiber([]()
+   fiber([]() // print_b
    {
       do
       {
