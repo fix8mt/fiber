@@ -487,17 +487,17 @@ int main()
       std::array { "for",        "who",   "me.",   "them",     R"(myself.")", ""             },
    };
 
-	for (const auto& pp : wordset)
-	{
-		fiber ([](const auto& words)
-		{
-			for (auto qq : words)
-			{
-				std::cout << qq << ' ';
-				this_fiber::yield();
-			}
-		}, pp).detach();
-	}
+   for (const auto& pp : wordset)
+   {
+      fiber ([](const auto& words)
+      {
+         for (auto qq : words)
+         {
+            std::cout << qq << ' ';
+            this_fiber::yield();
+         }
+      }, pp).detach();
+   }
 
    return 0;
 }
