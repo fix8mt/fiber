@@ -703,12 +703,12 @@ private:
 
 public:
 	template<typename Fn, typename... Args>
-	requires std::invocable<Fn&&, Args...> && (!std::is_bind_expression_v<Fn>)
+	requires std::invocable<Fn, Args...> && (!std::is_bind_expression_v<Fn>)
 	constexpr fiber(Fn&& func, Args&&... args)
 		: fiber({}, std::bind(std::forward<Fn>(func), std::forward<Args>(args)...)) {}
 
 	template<typename Fn, typename... Args>
-	requires std::invocable<Fn&&, Args...> && (!std::is_bind_expression_v<Fn>)
+	requires std::invocable<Fn, Args...> && (!std::is_bind_expression_v<Fn>)
 	constexpr fiber(fiber_params&& params, Fn&& func, Args&&... args)
 		: fiber(std::forward<fiber_params>(params), std::bind(std::forward<Fn>(func), std::forward<Args>(args)...)) {}
 
@@ -903,7 +903,7 @@ public:
 		return joinable() && !is_detached() ? schedule(false) : false;
 	}
 	template<typename Fn, typename... Args>
-	requires std::invocable<Fn&&, Args...> && (!std::is_bind_expression_v<Fn>)
+	requires std::invocable<Fn, Args...> && (!std::is_bind_expression_v<Fn>)
 	constexpr void resume_with(Fn&& func, Args&&... args)
 		{ resume_with(std::bind(std::forward<Fn>(func), std::forward<Args>(args)...)); }
 
@@ -981,12 +981,12 @@ class jfiber : public fiber
 {
 public:
 	template<typename Fn, typename... Args>
-	requires std::invocable<Fn&&, Args...> && (!std::is_bind_expression_v<Fn>)
+	requires std::invocable<Fn, Args...> && (!std::is_bind_expression_v<Fn>)
 	constexpr jfiber(Fn&& func, Args&&... args)
 		: fiber({.join=true}, std::bind(std::forward<Fn>(func), std::forward<Args>(args)...)) {}
 
 	template<typename Fn, typename... Args>
-	requires std::invocable<Fn&&, Args...> && (!std::is_bind_expression_v<Fn>)
+	requires std::invocable<Fn, Args...> && (!std::is_bind_expression_v<Fn>)
 	constexpr jfiber(fiber_params&& params, Fn&& func, Args&&... args)
 		: jfiber(std::move(params), std::bind(std::forward<Fn>(func), std::forward<Args>(args)...)) {}
 
@@ -1359,7 +1359,7 @@ void f8_fibers::wait_any(Fn&& func) noexcept
 // uses std::invoke_result (std::result_of is deprecated)
 // policy must be launch::dispatch
 template<typename Fn, typename... Args>
-requires std::invocable<Fn&&, Args...>
+requires std::invocable<Fn, Args...>
 std::future<std::invoke_result_t<std::decay_t<Fn>, std::decay_t<Args>...>>
 constexpr async(fiber_params&& params, Fn&& func, Args... args)
 {
@@ -1372,7 +1372,7 @@ constexpr async(fiber_params&& params, Fn&& func, Args... args)
 }
 
 template<typename Fn, typename... Args>
-requires std::invocable<Fn&&, Args...>
+requires std::invocable<Fn, Args...>
 std::future<std::invoke_result_t<std::decay_t<Fn>, std::decay_t<Args>...>>
 constexpr async(Fn&& func, Args... args) { return async({}, std::forward<Fn>(func), std::forward<Args>(args)...); }
 

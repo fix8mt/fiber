@@ -8,7 +8,8 @@
 
 ------------------------------------------------------------------------
 ## Introduction
-This is a novel fiber implementation with a similar interface to `std::thread`. Taking any callable object, fibers execute and cooperatively yield amongst
+This is a novel fiber implementation with a similar interface to `std::thread`. Taking any [callable](https://en.cppreference.com/w/cpp/named_req/Callable)
+object, fibers execute and cooperatively yield amongst
 themselves and the calling function all within a single thread. Using fibers, single threaded applications can be written as though they were multi-threaded,
 with the advantage that no concurrency controls are required.
 For multi-threaded applications, each thread maintains its own list of running fibers, leaving the user to implement their own concurrency controls. This
@@ -44,7 +45,7 @@ Currently only `Linux/x86_64` is supported. Other platforms to be supported in t
 - **x86_64 Linux only**
 - single _header-only_
 - stackful fibers; stacksize configurable for each fiber
-- supports any [callable](https://en.cppreference.com/w/cpp/named_req/Callable) object (eg. function, class member, lambda expression) with optional arguments
+- supports any callable object (eg. function, class member, lambda expression) with optional arguments
 - heap based, memory-mapped or placement stacks; user definable stack can also be used
 - context switch implemented with inline assembly
 - fibers can be moved to other threads (can be configured out for performance)
@@ -460,7 +461,7 @@ $
 </details>
 
 ## 4. Detached fiber workpiece
-In this example, four detached fibers are created in a new thread.
+In this example, four detached fibers are created.
 
 When main ends, the detached fibers are activated in creation order. Each fiber takes a lambda expression as its callable object,
 which prints from an array constructed with every fourth word until the array is exhausted.
@@ -529,7 +530,7 @@ template<typename Ps, std::invocable Fn, typename... Fns>
 constexpr void launch_all_with_params(Ps&& params, Fn&& func, Fns&& ...funcs);
 ```
 To demonstrate the use of `launch_all` and `launch_all_with_params`,
-one example simply creates the fibers in the order they are defined; the second example creates the fibers with a specifed launch order (hence the need for
+one example simply creates the fibers in the order they are defined; the second example creates the fibers with a specified launch order (hence the need for
 'with params').
 
 The `launch_all` and `launch_all_with_params` templates always detach the fibers they create. Two additional versions are also provided - `launch_all_n` and `launch_all_with_params_n`
