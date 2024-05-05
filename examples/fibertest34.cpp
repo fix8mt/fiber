@@ -31,67 +31,41 @@
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
-#include <cstdio>
-#include <cstdlib>
+#include <iostream>
+#include <iomanip>
 #include <thread>
+#include <string>
 #include <fix8/fiber.hpp>
 
 using namespace FIX8;
 
-//-----------------------------------------------------------------------------------------
-// from Dilawar's Blog
-// https://dilawar.github.io/posts/2021/2021-11-14-example-boost-fiber/
-//-----------------------------------------------------------------------------------------
-int main()
+class doit
 {
-	static int ii{};
+	int ii{};
 
-	fiber([]()
+public:
+	template<typename Fn>
+	void run(Fn cond)
 	{
-		do
+		const char spacer { this_fiber::is_main() ? '\0' : '\t' };
+		std::cout << spacer << this_fiber::name() << ":entry (fiber id:" << this_fiber::get_id() << ")\n";
+		for (; cond(); ++ii)
 		{
-			std::printf("%c", 'a');
+			std::cout << spacer << this_fiber::name() << ':' << ii << '\n';
 			this_fiber::yield();
+			std::cout << spacer << this_fiber::name() << ':' << ii << " (resumed)\n";
 		}
-		while (++ii < 20);
-	}).detach();
+		if (!this_fiber::is_main())
+			fibers::print();
+		std::cout << spacer << this_fiber::name() << ":exit\n";
+	}
+	void run(int cnt) { run([this, cnt]() { return ii < cnt; }); }
+};
 
-	fiber([]()
-	{
-		do
-		{
-			std::printf("%c", 'b');
-			std::thread([]() { std::printf("%c", 'B'); }).detach();
-			this_fiber::yield();
-		}
-		while (++ii < 20);
-	}).detach();
-
-	std::printf("%c", 'X');
-	std::atexit([]()
-	{
-		using namespace std::chrono_literals;
-		std::this_thread::sleep_for(100ms);
-		std::printf("%c", '\n');
-	});
-	return 0;
+int main(int argc, char *argv[])
+{
+	doit a, b;
+   fiber f0({"func"}, static_cast<void (doit::*)(int)>(&doit::run), &a, 5);
+	b.run([&f0]() { return f0.joinable(); });
+   return 0;
 }
-
-// XabababBabBBabBababBabBabBBabBaB
-// XabababBabBBabBabBabBababBabBaBB
-// XabababBabBBabBabBababBababBBBaB
-// XabababBabBababBBBababBBabBabBaB
-// XabababBabBBabBababBabBabBabBBaB
-// XabababBabBBabBababBabBabBabBaBB
-// XabababBabBBababBabBabBBababBaBB
-// XabababBabBabBBabababBBBabBabaBB
-// XabababBBabBabababBBabBBababBaBB
-// XabababBabBabBabBBababBabBabBBaB
-// XabababBBababBabBabBabBBabBabaBB
-// XabababBabBabBBababababBBBabBBaB
-// XabababBabBBabBababBabBabBBabaBB
-// XabababBabBBabBababBabBabBBabBaB
-// XabababBabBBababBBababBBababBaBB
-// XababBabBababBababBBBabBababBaBB
-// XabababBabBBabBababBabBabBBabBaB
-// XabababBabBBababBabBabBBababBaBB

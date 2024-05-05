@@ -31,67 +31,51 @@
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 //-----------------------------------------------------------------------------------------
-#include <cstdio>
-#include <cstdlib>
-#include <thread>
+#include <iostream>
+#include <ranges>
+#include <string_view>
+#include <exception>
+#include <array>
+#include <list>
+#include <utility>
 #include <fix8/fiber.hpp>
 
+//-----------------------------------------------------------------------------------------
 using namespace FIX8;
 
 //-----------------------------------------------------------------------------------------
-// from Dilawar's Blog
-// https://dilawar.github.io/posts/2021/2021-11-14-example-boost-fiber/
-//-----------------------------------------------------------------------------------------
-int main()
+template<typename T>
+void fibonacci (T& val, int cnt)
 {
-	static int ii{};
+	for(T next{1}; --cnt; this_fiber::yield())
+		val = std::exchange(next, val + next);
+}
 
-	fiber([]()
+int main(int argc, char *argv[])
+{
+	int num{18};
+	if (argc > 1)
 	{
-		do
+		if (std::string_view(argv[1]) == "-h")
 		{
-			std::printf("%c", 'a');
-			this_fiber::yield();
+			std::cout << "usage: " << argv[0] << " [count]\n";
+			return 0;
 		}
-		while (++ii < 20);
-	}).detach();
-
-	fiber([]()
-	{
-		do
+		try
 		{
-			std::printf("%c", 'b');
-			std::thread([]() { std::printf("%c", 'B'); }).detach();
-			this_fiber::yield();
+			if ((num = std::stoi(argv[1])) <= 0)
+				throw std::invalid_argument("count must be +ve integer");
 		}
-		while (++ii < 20);
-	}).detach();
-
-	std::printf("%c", 'X');
-	std::atexit([]()
-	{
-		using namespace std::chrono_literals;
-		std::this_thread::sleep_for(100ms);
-		std::printf("%c", '\n');
-	});
+		catch (const std::exception& e)
+		{
+			std::cerr << "exception: " << e.what() << " (" << argv[1] << ')' << std::endl;
+			return 1;
+		}
+	}
+	uint64_t val{};
+	for (fiber f0(fibonacci<decltype(val)>, std::ref(val), num); f0; f0.resume())
+		std::cout << val << ' ';
+	std::cout << std::endl;
 	return 0;
 }
 
-// XabababBabBBabBababBabBabBBabBaB
-// XabababBabBBabBabBabBababBabBaBB
-// XabababBabBBabBabBababBababBBBaB
-// XabababBabBababBBBababBBabBabBaB
-// XabababBabBBabBababBabBabBabBBaB
-// XabababBabBBabBababBabBabBabBaBB
-// XabababBabBBababBabBabBBababBaBB
-// XabababBabBabBBabababBBBabBabaBB
-// XabababBBabBabababBBabBBababBaBB
-// XabababBabBabBabBBababBabBabBBaB
-// XabababBBababBabBabBabBBabBabaBB
-// XabababBabBabBBababababBBBabBBaB
-// XabababBabBBabBababBabBabBBabaBB
-// XabababBabBBabBababBabBabBBabBaB
-// XabababBabBBababBBababBBababBaBB
-// XababBabBababBababBBBabBababBaBB
-// XabababBabBBabBababBabBabBBabBaB
-// XabababBabBBababBabBabBBababBaBB

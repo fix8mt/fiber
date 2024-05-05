@@ -39,16 +39,18 @@
 
 using namespace FIX8;
 
-void func (bool& flags, int cnt)
+void doit(int ii)
+{
+	std::cout << (this_fiber::is_main() ? '\0' : '\t') << this_fiber::name() << ':' << ii << '\n';
+	this_fiber::yield();
+	std::cout << (this_fiber::is_main() ? '\0' : '\t') << this_fiber::name() << ':' << ii << " (resumed)\n";
+}
+
+void func (int cnt)
 {
 	std::cout << '\t' << this_fiber::name() << ":entry (fiber id:" << this_fiber::get_id() << ")\n";
-	for (int kk{}; kk < cnt; ++kk)
-	{
-		std::cout << '\t' << this_fiber::name() << ':' << kk << '\n';
-		this_fiber::yield();
-		std::cout << '\t' << this_fiber::name() << ':' << kk << " (resumed)\n";
-	}
-	flags = true;
+	for (int ii{}; ii < cnt; doit(ii++))
+		;
 	fibers::print();
 	std::cout << '\t' << this_fiber::name() << ":exit\n";
 }
@@ -56,17 +58,9 @@ void func (bool& flags, int cnt)
 int main(int argc, char *argv[])
 {
 	std::cout << this_fiber::name() << ":entry (fiber id:" << this_fiber::get_id() << ")\n";
-   bool flags{};
-   fiber f0({"func"}, &func, std::ref(flags), 5);
-   std::cout << "flags=" << std::boolalpha << flags << '\n';
-
-   for (int ii{}; f0; ++ii)
-   {
-      std::cout << this_fiber::name() << ':' << ii << '\n';
-      this_fiber::yield();
-      std::cout << this_fiber::name() << ':' << ii << " (resumed)\n";
-   }
-   std::cout << "flags=" << std::boolalpha << flags << '\n';
+   fiber f0({"func"}, &func, 5);
+   for (int ii{}; f0; doit(ii++))
+		;
 	std::cout << this_fiber::name() << ":exit\n";
    return 0;
 }

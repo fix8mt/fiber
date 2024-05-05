@@ -116,6 +116,7 @@ int main(int argc, char *argv[])
 		option{ "help",		no_argument,			nullptr, 'h' },
 		option{ "write",		no_argument,			nullptr, 'w' },
 		option{ "percent",	no_argument,			nullptr, 'p' },
+		option{ "retain",		no_argument,			nullptr, 'r' },
 		option{ "fibers",		required_argument,	nullptr, 'f' },
 		option{ "maxexp",		required_argument,	nullptr, 'm' },
 		option{ "interval",	required_argument,	nullptr, 'i' },

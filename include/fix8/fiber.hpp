@@ -1,6 +1,6 @@
 //-----------------------------------------------------------------------------------------
 // fiber (header only)
-// Copyright (C) 2022-23 Fix8 Market Technologies Pty Ltd
+// Copyright (C) 2022-24 Fix8 Market Technologies Pty Ltd
 //   by David L. Dight
 // see https://github.com/fix8mt/fiber
 //
@@ -150,7 +150,7 @@ public:
 #endif
 	constexpr auto operator<=>(const fiber_id& other) const noexcept { return _ptr <=> other._ptr; }
 	constexpr bool operator!() const noexcept { return _ptr == nullptr; }
-	constexpr explicit operator bool() const noexcept { return !operator!(); }
+	constexpr explicit operator bool() const noexcept { return _ptr; }
 	friend struct std::hash<fiber_id>;
 };
 
@@ -173,6 +173,7 @@ struct f8_this_fiber
 #endif
 	inline static void yield() noexcept;
 	inline static void resume_main() noexcept;
+	inline static bool is_main() noexcept;
 	inline static bool schedule_main() noexcept;
 	template<typename Clock, typename Duration>
 	static void sleep_until(const std::chrono::time_point<Clock, Duration>& sltime);
@@ -328,7 +329,7 @@ public:
 //-----------------------------------------------------------------------------------------
 template<typename T=f8_fixedsize_heap_stack, typename... Args>
 requires std::derived_from<T, f8_stack>
-constexpr f8_stack_ptr make_stack(Args&&... args)
+f8_stack_ptr make_stack(Args&&... args)
 {
 	return f8_stack_ptr{new T(std::forward<Args>(args)...)};
 }
@@ -336,7 +337,7 @@ constexpr f8_stack_ptr make_stack(Args&&... args)
 enum class stack_type { heap, mapped, placement };
 
 template<stack_type type, typename... Args>
-constexpr f8_stack_ptr make_stack(Args&&... args)
+f8_stack_ptr make_stack(Args&&... args)
 {
 	using enum stack_type;
 	if constexpr (type == heap)
@@ -408,7 +409,7 @@ class alignas(64) fiber_base
 	// TODO: win64 xmm6 - xmm15
 	// TODO other architectures
 	template<typename Fn>
-	void setup_continuation(Fn&& func) noexcept
+	constexpr void setup_continuation(Fn&& func) noexcept
 	{
 		_stk = _stk_alloc + _stacksz / sizeof(uintptr_t) - 1; // set top of stack
 		*--_stk = reinterpret_cast<uintptr_t>(trampoline<callable_wrapper<Fn>>);
@@ -429,7 +430,7 @@ class alignas(64) fiber_base
 
 public:
 	template<std::invocable Fn>
-	fiber_base(fiber_params&& params, Fn&& func, uintptr_t *sp, fiber_id parent) noexcept
+	constexpr fiber_base(fiber_params&& params, Fn&& func, uintptr_t *sp, fiber_id parent) noexcept
 		: _stacksz(params.stacksz), _stk_alloc(sp), _params(std::move(params)), _pfid(parent),
 			_flags{(1 << notstarted) | (_params.join ? (1 << joinonexit) : 0ULL)}
 	{
@@ -720,7 +721,7 @@ public:
 	{
 		uintptr_t *sp { reinterpret_cast<uintptr_t *>(params.stack->allocate(params.stacksz)) };
 		GetVars();
-		_ctx.reset(new (reinterpret_cast<char*>(sp))
+		reset(new (reinterpret_cast<char*>(sp))
 			fiber_base(std::forward<fiber_params>(params), std::forward<Fn>(func), sp, cur->get_id()), [](auto *) {});
 		uni.insert(_ctx);
 		sch.push_back(_ctx);
@@ -924,6 +925,15 @@ public:
 	{
 		if (_ctx != other._ctx)
 			_ctx.swap(other._ctx);
+	}
+	void reset() noexcept
+	{
+		_ctx.reset();
+	}
+	template<typename Y, typename Deleter>
+	void reset(Y* ptr, Deleter d) noexcept
+	{
+		_ctx.reset(ptr, d);
 	}
 	static void sort() noexcept
 	{
@@ -1237,18 +1247,20 @@ bool f8_this_fiber::schedule_main() noexcept
 		flg.reset(static_cast<int>(global_fiber_flags::skipmain));
 	fiber fb{man};
 	auto result { fb.schedule() };
-	fb._ctx.reset();
+	fb.reset();
 	return result;
 }
 
 void f8_this_fiber::resume_main() noexcept
 {
+	schedule_main();
+	yield();
+}
+
+bool f8_this_fiber::is_main() noexcept
+{
 	GetVars();
-	if (flg[static_cast<int>(global_fiber_flags::skipmain)])
-		flg.reset(static_cast<int>(global_fiber_flags::skipmain));
-	fiber fb{man};
-	fb.resume();
-	fb._ctx.reset();
+	return cur == man;
 }
 
 template<typename Clock, typename Duration>
@@ -1419,14 +1431,14 @@ constexpr void launch_all_with_params_n(C& c, Ps&& params, Fn&& func, Fns&& ...f
 
 template<typename T=fiber, typename... Args>
 requires std::derived_from<T, fiber>
-constexpr fiber_ptr make_fiber(Args&&... args)
+fiber_ptr make_fiber(Args&&... args)
 {
 	return fiber_ptr(new T(std::forward<Args>(args)...));
 }
 
 template<typename T=fiber, typename... Args>
 requires std::derived_from<T, fiber>
-constexpr fiber_ptr make_fiber(fiber_params&& params, Args&&... args)
+fiber_ptr make_fiber(fiber_params&& params, Args&&... args)
 {
 	return fiber_ptr(new T(std::forward<fiber_params>(params), std::forward<Args>(args)...));
 }
@@ -1445,6 +1457,7 @@ namespace this_fiber
 #endif
 	inline void yield() noexcept { return f8_this_fiber::yield(); }
 	inline void resume_main() noexcept { return f8_this_fiber::resume_main(); }
+	inline bool is_main() noexcept { return f8_this_fiber::is_main(); }
 	inline bool schedule_main() noexcept { return f8_this_fiber::schedule_main(); }
 	inline std::string_view name(std::string_view what) noexcept { return f8_this_fiber::name(what); }
 	inline std::string_view name() noexcept { return f8_this_fiber::name(); }
