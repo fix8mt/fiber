@@ -88,9 +88,9 @@ endforeach()
 
 # to disable building monitor tests:
 # cmake -DBUILD_MONITOR=false ..
-option(BUILD_MONITOR "enable building monitor tests" true)
+option(BUILD_MONITOR "enable building monitor tests (Windows not supported)" true)
 message("-- Build monitor tests: ${BUILD_MONITOR}")
-if(BUILD_MONITOR)
+if(BUILD_MONITOR AND NOT WIN32)
 	message(STATUS "Populating termbox2...")
 	include(ExternalProject)
 	ExternalProject_Add(termbox2
