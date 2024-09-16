@@ -39,7 +39,7 @@
 #define FIX8_FIBER_HPP_
 
 //----------------------------------------------------------------------------------------
-#if !defined(__x86_64__) || (defined(_MSC_VER) && !defined(_M_IX86) && !defined(_M_X64))
+#if defined _MSC_VER && (!defined(_M_IX86) && !defined(_M_X64)) || !defined _MSC_VER && !defined(__x86_64__)
 #error "this fiber implementation only runs on x86_64"
 #endif
 
