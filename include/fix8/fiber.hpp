@@ -69,11 +69,13 @@
 #include <atomic>
 
 #include <fcntl.h>
+#if not defined _MSC_VER
 #include <sys/resource.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <pthread.h>
+#endif
 
 //-----------------------------------------------------------------------------------------
 // default fiber stack size; define in your app to override or set in ctor
@@ -261,6 +263,7 @@ using f8_stack_ptr = std::unique_ptr<f8_stack>;
 
 //-----------------------------------------------------------------------------------------
 /// Anonymous memory mapped stack
+#if not defined _MSC_VER
 class f8_fixedsize_mapped_stack final : public f8_stack
 {
 public:
@@ -295,6 +298,7 @@ public:
 		f8_stack::deallocate();
 	}
 };
+#endif
 
 //-----------------------------------------------------------------------------------------
 /// Simple heap based stack
@@ -346,8 +350,10 @@ f8_stack_ptr make_stack(Args&&... args)
 	using enum stack_type;
 	if constexpr (type == heap)
 		return make_stack(std::forward<Args>(args)...);
+#if not defined _MSC_VER
 	if constexpr (type == mapped)
 		return make_stack<f8_fixedsize_mapped_stack>(std::forward<Args>(args)...);
+#endif
 	if constexpr (type == placement)
 		return make_stack<f8_fixedsize_placement_stack>(std::forward<Args>(args)...);
 }
