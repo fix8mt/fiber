@@ -150,6 +150,7 @@ if(BUILD_TESTS)
 		GIT_TAG devel
 	)
 	FetchContent_MakeAvailable(Catch2)
+	target_compile_options(Catch2 PRIVATE -std=c++17)
 	list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 	include(Catch)
 

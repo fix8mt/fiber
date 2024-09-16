@@ -34,7 +34,7 @@
 #include <iostream>
 #include <functional>
 #include <cctype>
-#ifdef _GNU_SOURCE
+#if not defined _MSC_VER
 #include <getopt.h>
 #endif
 #include <fix8/fiber.hpp>

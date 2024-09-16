@@ -121,7 +121,7 @@ TEST_CASE("Wordset - fiber reconstructing sentence", "[fiber][launch_all_with_pa
 		std::array { "am ",			"of ",		"no ",		"because ",	"doing ",		" - Albert ",	},
 		std::array { "thankful ",	"those ",	"to ",		"of ",		"it ",			"Einstein\n"	},
 	};
-	static const std::string_view cmpstr { R"("I am thankful for all of those who said no to me. It’s because of them I’m doing it myself."
+	static const char *cmpstr { R"("I am thankful for all of those who said no to me. It’s because of them I’m doing it myself."
  - Albert Einstein
 )"};
 
