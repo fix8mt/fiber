@@ -52,7 +52,7 @@ struct tell
 	}
 };
 
-int main(int argc, char *argv[])
+int main()
 {
 	tell wrp;
    bool flag{};

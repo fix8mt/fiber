@@ -1,6 +1,6 @@
 # ----------------------------------------------------------------------------------------
 # fiber (header only)
-# Copyright (C) 2022-23 Fix8 Market Technologies Pty Ltd
+# Copyright (C) 2022-24 Fix8 Market Technologies Pty Ltd
 #   by David L. Dight
 # see https://github.com/fix8mt/fiber
 #

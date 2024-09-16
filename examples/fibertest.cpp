@@ -70,7 +70,7 @@ struct foo
 	{
 		auto st { "sub"s + std::to_string(arg) };
 		this_fiber::name(st.c_str());
-		std::cout << "\tsub2 starting " << arg << '\n';
+		std::cout << "\tsub2 starting " << arg << ' ' << str << '\n';
 		for (int ii{}; ii < arg; )
 		{
 			std::cout << '\t' << this_fiber::name() << ' ' << arg << ": " << ++ii << '\n';

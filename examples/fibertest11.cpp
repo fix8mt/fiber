@@ -43,7 +43,7 @@ int main()
 {
 	static constexpr const std::array wordset
 	{
-		std::array { R"("I)",		"all",	"said",	"It’s",		"I’m",			"\n –",			},
+		std::array { R"("I)",		"all",	"said",	"It's",		"I'm",			"\n –",			},
 		std::array { "thankful",	"those",	"to",		"of",			"it",				"Einstein\n"	},
 		std::array { "for",			"who",	"me.",	"them",		R"(myself.")",	""					},
 		std::array { "am",			"of",		"no",		"because",	"doing",			"Albert",		},

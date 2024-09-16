@@ -1,11 +1,11 @@
 //-----------------------------------------------------------------------------------------
 // fiber (header only)
-// Copyright (C) 2022-23 Fix8 Market Technologies Pty Ltd
+// Copyright (C) 2022-24 Fix8 Market Technologies Pty Ltd
 //   by David L. Dight
 // see https://github.com/fix8mt/fiber
 //
 // Lightweight header-only stackful per-thread fiber
-//		with built-in roundrobin scheduler x86_64 / linux only
+//		with built-in roundrobin scheduler x86_64
 //
 // Distributed under the Boost Software License, Version 1.0 August 17th, 2003
 //
@@ -50,7 +50,7 @@ void doit()
 }
 
 //-----------------------------------------------------------------------------------------
-int main(int argc, char *argv[])
+int main(int argc, [[maybe_unused]] char *argv[])
 {
 	auto fb { argc > 1 ? make_fiber({"fiber"}, &doit) : make_fiber<jfiber>({"jfiber"}, &doit) };
 	this_fiber::yield();

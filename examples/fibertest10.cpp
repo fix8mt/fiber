@@ -1,11 +1,11 @@
 //-----------------------------------------------------------------------------------------
 // fiber (header only)
-// Copyright (C) 2022-23 Fix8 Market Technologies Pty Ltd
+// Copyright (C) 2022-24 Fix8 Market Technologies Pty Ltd
 //   by David L. Dight
 // see https://github.com/fix8mt/fiber
 //
 // Lightweight header-only stackful per-thread fiber
-//		with built-in roundrobin scheduler x86_64 / linux only
+//		with built-in roundrobin scheduler x86_64
 //
 // Distributed under the Boost Software License, Version 1.0 August 17th, 2003
 //
@@ -43,7 +43,7 @@ int main()
 {
 	static constexpr const std::array wordset
 	{
-		std::array { R"("I)",		"all",	"said",	"It’s",		"I’m",			"\n –",			},
+		std::array { R"("I)",		"all",	"said",	"It's",		"I'm",			"\n –",			},
 		std::array { "am",			"of",		"no",		"because",	"doing",			"Albert",		},
 		std::array { "thankful",	"those",	"to",		"of",			"it",				"Einstein\n"	},
 		std::array { "for",			"who",	"me.",	"them",		R"(myself.")",	""					},

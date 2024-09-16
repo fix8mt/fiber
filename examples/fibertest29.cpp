@@ -53,7 +53,7 @@ void func (int loops)
 	std::cout << this_fiber::name() << ": exit\n";
 }
 
-int main(int argc, char *argv[])
+int main(int argc, [[maybe_unused]] char *argv[])
 {
    fiber f0({"func0"}, func, 5), f1({"func1"}, func, 10), f2({"func2"}, func, 15);
 	argc > 1 ? fibers::wait_all() : fibers::wait_any();
