@@ -551,6 +551,43 @@ _doswitch:
 .size _coroswitch,.-_coroswitch
 .section .note.GNU-stack,"",%progbits
 )");
+#elif defined __APPLE__
+asm(R"(.text
+.align 16
+.globl _coroswitch,@function
+_coroswitch:
+	cmpq %rdi,%rsi       /* prevent self-switch */
+	jne _doswitch
+	ret
+_doswitch:
+	subq $0x40,%rsp
+	stmxcsr (%rsp)       /* save fpu/mx/sse flags */
+	fnstcw  4(%rsp)
+	movq %r15,8(%rsp)
+	movq %r14,8*2(%rsp)
+	movq %r13,8*3(%rsp)
+	movq %r12,8*4(%rsp)
+	movq %rbx,8*5(%rsp)
+	movq %rbp,8*6(%rsp)
+	movq %rdi,8*7(%rsp)
+
+	movq %rsp,(%rdi)     /* save old user stack */
+	movq (%rsi),%rsp     /* restore new user stack */
+
+	ldmxcsr (%rsp)       /* restore fpu/mx/sse flags */
+	fldcw  4(%rsp)
+	movq 8(%rsp),%r15
+	movq 8*2(%rsp),%r14
+	movq 8*3(%rsp),%r13
+	movq 8*4(%rsp),%r12
+	movq 8*5(%rsp),%rbx
+	movq 8*6(%rsp),%rbp
+	movq 8*7(%rsp),%rdi
+	movq 8*8(%rsp),%r8   /* get ret address */
+	addq $0x48,%rsp      /* one extra qword for ret */
+	jmp *%r8             /* jump to new location */
+.section "",%progbits
+)");
 #else
 asm(R"(.text
 .align 16
