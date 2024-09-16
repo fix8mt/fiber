@@ -4,7 +4,7 @@
 
 # fiber
 
-### A novel C++20 fiber implementation with similar interface to `std::thread`, header-only / `x86_64` / Linux only / stackful / built-in scheduler / thread shareable
+### A novel C++20 fiber implementation with similar interface to `std::thread`, header-only / `x86_64` / stackful / built-in scheduler / thread shareable
 
 ------------------------------------------------------------------------
 ## Introduction
@@ -15,22 +15,21 @@ with the advantage that no concurrency controls are required.
 For multi-threaded applications, each thread maintains its own list of running fibers, leaving the user to implement their own concurrency controls. This
 implementation allows you to move fibers between threads. This can be used to share work or scale an application by adding more fibers to new or existing threads.
 
-Currently only `Linux/x86_64` is supported. Other platforms to be supported in the future.
+Currently only `x86_64` is supported. Other platforms to be supported in the future.
 
 | ![montest2 - example monitor application](https://github.com/fix8mt/fiber/blob/main/assets/fibermonitor1.png) |
 |:--:|
 | Screenshot from *`montest2`* with 20 fibers working in one thread and using `fiber_monitor`|
 
 ## Quick links
-|**Link**|**Description**|
---|--
-|[Wiki]( https://github.com/fix8mt/fiber/wiki)| for complete documentation|
-|[API](https://github.com/fix8mt/fiber/wiki/API)| for API documentation|
-|[Building](https://github.com/fix8mt/fiber/wiki/Building)| for build options and settings|
-|[Monitor](https://github.com/fix8mt/fiber/wiki/Monitor)| for built-in monitor documentation|
-|[Examples](https://github.com/fix8mt/fiber/wiki/Examples)| for details about all the included examples|
-|[Here](https://github.com/fix8mt/fiber/blob/main/include/fix8/fiber.hpp)| for implementation|
-|[Here](https://github.com/fix8mt/fiber/tree/f8_fiber_boost)| for the original `f8fiber` implementation|
+|1|[Wiki]( https://github.com/fix8mt/fiber/wiki)| for complete documentation|
+|:--|:--|:--|
+|2|[API](https://github.com/fix8mt/fiber/wiki/API)| for API documentation|
+|3|[Building](https://github.com/fix8mt/fiber/wiki/Building)| for build options and settings|
+|4|[Monitor](https://github.com/fix8mt/fiber/wiki/Monitor)| for built-in monitor documentation|
+|5|[Examples](https://github.com/fix8mt/fiber/wiki/Examples)| for details about all the included examples|
+|6|[Here](https://github.com/fix8mt/fiber/blob/main/include/fix8/fiber.hpp)| for implementation|
+|7|[Here](https://github.com/fix8mt/fiber/tree/f8_fiber_boost)| for the original `f8fiber` implementation|
 
 ## Motivation
 - header-only
@@ -42,7 +41,7 @@ Currently only `Linux/x86_64` is supported. Other platforms to be supported in t
 - expand and improve interface
 
 ## Features
-- **x86_64 Linux only**
+- **x86_64 only**
 - single _header-only_
 - stackful fibers; stacksize configurable for each fiber
 - supports any callable object (eg. function, class member, lambda expression) with optional arguments

@@ -1,11 +1,15 @@
 //-----------------------------------------------------------------------------------------
+// SPDX-License-Identifier: BSL-1.0
+// SPDX-FileCopyrightText: Copyright (C) 2023-24 Fix8 Market Technologies Pty Ltd
+// SPDX-FileType: SOURCE
+//
 // fiber (header only)
 // Copyright (C) 2022-24 Fix8 Market Technologies Pty Ltd
 //   by David L. Dight
 // see https://github.com/fix8mt/fiber
 //
 // Lightweight header-only stackful per-thread fiber
-//		with built-in roundrobin scheduler x86_64 / linux only
+//		with built-in roundrobin scheduler x86_64 only
 //
 // Distributed under the Boost Software License, Version 1.0 August 17th, 2003
 //
@@ -35,8 +39,8 @@
 #define FIX8_FIBER_HPP_
 
 //----------------------------------------------------------------------------------------
-#if !defined(__linux__) || !defined(__x86_64__)
-#error "this fiber implementation only runs on x86_64/Linux"
+#if !defined(__x86_64__) || (defined(_MSC_VER) && !defined(_M_IX86) && !defined(_M_X64))
+#error "this fiber implementation only runs on x86_64"
 #endif
 
 //----------------------------------------------------------------------------------------
@@ -406,8 +410,8 @@ class alignas(64) fiber_base
 	};
 
 	// stack: trampoline,fiber(wrapper func),rdi,rbp,r12,r13,r14,r15,fpu/sse flags
-	// TODO: win64 xmm6 - xmm15
-	// TODO other architectures
+	// win64  + xmm6 - xmm15
+	// TODO other ABI
 	template<typename Fn>
 	constexpr void setup_continuation(Fn&& func) noexcept
 	{
@@ -415,8 +419,13 @@ class alignas(64) fiber_base
 		*--_stk = reinterpret_cast<uintptr_t>(trampoline<callable_wrapper<Fn>>);
 		*--_stk = reinterpret_cast<uintptr_t>(new (reinterpret_cast<char*>(_stk_alloc) + sizeof(fiber_base))
 			callable_wrapper(std::forward<Fn>(func))); // store at bottom of stack
+#if defined _MSC_VER
+		std::memset(_stk - 26, 0x0, 26 * sizeof(uintptr_t)); // zero: rsi,rdi,rbp,r12,r13,r14,r15,xmm6-xmm15
+		_stk -= 27; // include flags
+#else
 		std::memset(_stk - 6, 0x0, 6 * sizeof(uintptr_t)); // zero: rdi,rbp,r12,r13,r14,r15
 		_stk -= 7; // include flags
+#endif
 		asm("stmxcsr %0" : "=m" (*reinterpret_cast<uint32_t*>(_stk))); // preserve lower dword
 		asm("fnstcw %0"  : "=m" (*(reinterpret_cast<uint32_t*>(_stk) + 1))); // preserve upper dword, lower word
 	}
@@ -481,7 +490,68 @@ public:
 
 //-----------------------------------------------------------------------------------------
 // static void fiber_base::coroswitch(fiber_base *old, fiber_base *newer) noexcept; //aka _coroswitch
-// TODO other architectures
+// TODO other ABI
+#if defined _MSC_VER
+asm(R"(.text
+.align 16
+.type _coroswitch,@function
+_coroswitch:
+	cmpq %rdx,%rcx			/* prevent self-switch */
+	jne _doswitch
+	ret
+_doswitch:
+	subq $0xE8,%rsp
+   stmxcsr (%rsp)			/* save fpu/mx/sse flags */
+   fnstcw  4(%rsp)
+	movq %r15,8(%rsp)
+	movq %r14,8*2(%rsp)
+	movq %r13,8*3(%rsp)
+	movq %r12,8*4(%rsp)
+	movq %rbx,8*5(%rsp)
+	movq %rbp,8*6(%rsp)
+	movq %rdi,8*7(%rsp)
+	movq %rsi,8*8(%rsp)
+	movups %xmm6,8*9(%rsp)
+	movups %xmm7,8*11(%rsp)
+	movups %xmm8,8*13(%rsp)
+	movups %xmm9,8*15(%rsp)
+	movups %xmm10,8*17(%rsp)
+	movups %xmm11,8*19(%rsp)
+	movups %xmm12,8*21(%rsp)
+	movups %xmm13,8*23(%rsp)
+	movups %xmm14,8*25(%rsp)
+	movups %xmm15,8*27(%rsp)
+
+	movq %rsp,(%rdx)		/* save old user stack */
+	movq (%rcx),%rsp		/* restore new user stack */
+
+   ldmxcsr (%rsp)			/* restore fpu/mx/sse flags */
+   fldcw  4(%rsp)
+   movq 8(%rsp),%r15
+   movq 8*2(%rsp),%r14
+   movq 8*3(%rsp),%r13
+   movq 8*4(%rsp),%r12
+   movq 8*5(%rsp),%rbx
+   movq 8*6(%rsp),%rbp
+   movq 8*7(%rsp),%rdi
+   movq 8*8(%rsp),%rsi
+	movups 8*9(%rsp),%xmm6
+	movups 8*11(%rsp),%xmm7
+	movups 8*13(%rsp),%xmm8
+	movups 8*15(%rsp),%xmm9
+	movups 8*17(%rsp),%xmm10
+	movups 8*19(%rsp),%xmm11
+	movups 8*21(%rsp),%xmm12
+	movups 8*23(%rsp),%xmm13
+	movups 8*25(%rsp),%xmm14
+	movups 8*27(%rsp),%xmm15
+	movq 8*29(%rsp),%r8	/* get ret address */
+	addq $0xF0,%rsp		/* one extra qword for ret */
+   jmp *%r8					/* jump to new location */
+.size _coroswitch,.-_coroswitch
+.section .note.GNU-stack,"",%progbits
+)");
+#else
 asm(R"(.text
 .align 16
 .type _coroswitch,@function
@@ -519,6 +589,7 @@ _doswitch:
 .size _coroswitch,.-_coroswitch
 .section .note.GNU-stack,"",%progbits
 )");
+#endif
 
 //-----------------------------------------------------------------------------------------
 class alignas(16) fiber
@@ -660,11 +731,11 @@ private:
 		static thread_local fiber_base_ptr _main_ctx_ptr { fiber_base_ptr(&_main_ctx, [](auto *) {}) };
 		static thread_local cvars _cvars // per thread singleton
 		{
-			._uniq={_main_ctx_ptr},._curr=_main_ctx_ptr,._main=_main_ctx_ptr,
-			._term=false,._now=std::chrono::system_clock::now()
+			._uniq={_main_ctx_ptr},._sched={},._curr=_main_ctx_ptr,._main=_main_ctx_ptr,
+			._term=false,._now=std::chrono::system_clock::now(),._gflags={},._finished={},._eptr={}
 		};
 #if defined FIX8_FIBER_MULTITHREADING_
-		static thread_local bool _register_cvars([]() // register this thread
+		[[maybe_unused]] static thread_local bool _register_cvars([]() // register this thread
 		{
 			return get_all_cvars().insert(std::this_thread::get_id(), &_cvars);
 		}());

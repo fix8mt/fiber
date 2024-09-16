@@ -5,7 +5,7 @@
 # see https://github.com/fix8mt/fiber
 #
 # Lightweight header-only stackful per-thread fiber
-#		with built-in roundrobin scheduler x86_64 / linux only
+#		with built-in roundrobin scheduler x86_64 only
 #
 # Distributed under the Boost Software License, Version 1.0 August 17th, 2003
 #
@@ -45,13 +45,18 @@ project (fiber
 	LANGUAGES CXX
 	HOMEPAGE_URL https://github.com/fix8mt/fiber
 	DESCRIPTION "Lightweight header-only stackful per-thread C++20 fiber"
-	VERSION 2.3
+	VERSION 2.4
 )
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 link_libraries(Threads::Threads)
 include_directories(${CMAKE_SOURCE_DIR}/include)
+
+# to disable warnings:
+# cmake -DBUILD_ALL_WARNINGS=false ..
+option(BUILD_ALL_WARNINGS "enable building with all warnings" true)
+message("-- Build: with all warnings ${BUILD_ALL_WARNINGS}")
 
 if(CMAKE_BUILD_TYPE STREQUAL "")
    set(CMAKE_BUILD_TYPE "RELEASE")
@@ -71,6 +76,11 @@ foreach(x ${esrc})
 	cmake_path(GET x STEM LAST_ONLY target)
 	add_executable(${target} ${x})
 	set_target_properties(${target} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED true)
+	if(BUILD_ALL_WARNINGS)
+		target_compile_options(${target} PRIVATE
+		$<$<CXX_COMPILER_ID:MSVC>:/W4>
+		$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>)
+	endif()
 	get_target_property(v1 ${target} CXX_STANDARD)
 	cmake_path(GET x FILENAME fname)
 	message("-- adding ${fname} cxx std: c++${v1}")
