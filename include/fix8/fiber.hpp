@@ -511,7 +511,7 @@ public:
 // static void fiber_base::coroswitch(fiber_base *old, fiber_base *newer) noexcept; //aka _coroswitch
 // TODO other ABI
 #if defined _MSC_VER
-asm(R"(.text
+__asm{R"(.text
 .align 16
 .type coroswitch,@function
 coroswitch:
@@ -569,7 +569,7 @@ _doswitch:
    jmp *%r8					/* jump to new location */
 .size _coroswitch,.-_coroswitch
 .section .note.GNU-stack,"",%progbits
-)");
+)"};
 #elif defined __APPLE__
 asm(R"(.text
 .align 16
