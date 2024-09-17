@@ -513,7 +513,7 @@ public:
 #if defined _MSC_VER
 __asm{R"(.text
 .align 16
-.type coroswitch,@function
+.global _asm_calculate_reals
 coroswitch:
 	cmpq %rdx,%rcx			/* prevent self-switch */
 	jne _doswitch
