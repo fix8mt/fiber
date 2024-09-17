@@ -411,7 +411,7 @@ class alignas(64) fiber_base
 		return sz;
 	}
 #else
-	__declspec(noinline) size_t get_default_stacksz()
+	__declspec(noinline) static size_t get_default_stacksz()
 	{
 		ULONG_PTR low, high;
 		GetCurrentThreadStackLimits(&low, &high);
@@ -511,7 +511,7 @@ public:
 // static void fiber_base::coroswitch(fiber_base *old, fiber_base *newer) noexcept; //aka _coroswitch
 // TODO other ABI
 #if defined _MSC_VER
-__asm(R"(.text
+asm(R"(.text
 .align 16
 .type coroswitch,@function
 coroswitch:
