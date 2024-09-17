@@ -409,15 +409,12 @@ class alignas(64) fiber_base
 		return sz;
 	}
 #else
+#define _WIN32_WINNT (0x0602)
 	__declspec(noinline) size_t get_default_stacksz()
 	{
-		static thread_local const size_t sz([]()
-		{
-			ULONG_PTR low, high;
-			GetCurrentThreadStackLimits(&low, &high);
-			return high - low;
-		}());
-		return sz;
+		ULONG_PTR low, high;
+		GetCurrentThreadStackLimits(&low, &high);
+		return high - low;
 	}
 #endif
 
