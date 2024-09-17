@@ -394,7 +394,9 @@ class alignas(64) fiber_base
 	static void trampoline(void *ptr) noexcept;
 
 	// [asm] stack switch routine
+#if not defined _MSC_VER
 	static void coroswitch(fiber_base *old, fiber_base *newer) noexcept asm("_coroswitch");
+#endif
 
 	static size_t get_default_stacksz()
 	{
@@ -500,8 +502,8 @@ public:
 #if defined _MSC_VER
 asm(R"(.text
 .align 16
-.type _coroswitch,@function
-_coroswitch:
+.type coroswitch,@function
+coroswitch:
 	cmpq %rdx,%rcx			/* prevent self-switch */
 	jne _doswitch
 	ret
