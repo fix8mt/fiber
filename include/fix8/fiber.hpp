@@ -430,8 +430,8 @@ class alignas(64) fiber_base
 #if defined _MSC_VER
 		std::memset(_stk - 26, 0x0, 26 * sizeof(uintptr_t)); // zero: rsi,rdi,rbp,r12,r13,r14,r15,xmm6-xmm15
 		_stk -= 27; // include flags
-		__asm(stmxcsr (*reinterpret_cast<uint32_t*>(_stk))); // preserve lower dword
-		__asm(fnstcw (*(reinterpret_cast<uint32_t*>(_stk) + 1))); // preserve upper dword, lower word
+		asm(stmxcsr (*reinterpret_cast<uint32_t*>(_stk))); // preserve lower dword
+		asm(fnstcw (*(reinterpret_cast<uint32_t*>(_stk) + 1))); // preserve upper dword, lower word
 #else
 		std::memset(_stk - 6, 0x0, 6 * sizeof(uintptr_t)); // zero: rdi,rbp,r12,r13,r14,r15
 		_stk -= 7; // include flags
