@@ -75,6 +75,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <pthread.h>
+#else
+#include <windows.h>
 #endif
 
 //-----------------------------------------------------------------------------------------
@@ -409,7 +411,6 @@ class alignas(64) fiber_base
 		return sz;
 	}
 #else
-#define _WIN32_WINNT (0x0602)
 	__declspec(noinline) size_t get_default_stacksz()
 	{
 		ULONG_PTR low, high;
