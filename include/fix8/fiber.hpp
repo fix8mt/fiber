@@ -396,7 +396,6 @@ class alignas(64) fiber_base
 	// [asm] stack switch routine
 #if not defined _MSC_VER
 	static void coroswitch(fiber_base *old, fiber_base *newer) noexcept asm("_coroswitch");
-#endif
 
 	static size_t get_default_stacksz()
 	{
@@ -409,6 +408,18 @@ class alignas(64) fiber_base
 		}());
 		return sz;
 	}
+#else
+	__declspec(noinline) size_t get_default_stacksz()
+	{
+		static thread_local const size_t sz([]()
+		{
+			ULONG_PTR low, high;
+			GetCurrentThreadStackLimits(&low, &high);
+			return high - low;
+		}());
+		return sz;
+	}
+#endif
 
 	template<typename Fn>
 	struct callable_wrapper
