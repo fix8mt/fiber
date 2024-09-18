@@ -94,6 +94,7 @@ int main(void)
 			sub_co2({.stacksz=32768}, &foo::sub, &bar, 5),
 			sub_co3({.stacksz=8192}, &foo::sub1, &bar, 8., "hello"),
 			sub_co4(std::bind(&foo::sub3, &bar, 12, "there"));
+#if not defined _MSC_VER
 	fiber sub_lam({.name="sub lambda",.stack=std::make_unique<f8_fixedsize_mapped_stack>()}, [](int arg)
 	//char stack[4096];
 	//fiber sub_lam({.name="sub lambda",.stacksz=sizeof(stack),.stack=std::make_unique<f8_fixedsize_placement_stack>(stack)}, [](int arg)
@@ -106,6 +107,7 @@ int main(void)
 		}
 		std::cout << "\tlambda leaving " << arg << '\n';
 	}, 15);
+#endif
 	for (int ii{}; fibers::has_fibers(); ++ii)
 	{
 		if (ii == 0)

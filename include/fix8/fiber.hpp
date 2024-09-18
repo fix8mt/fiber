@@ -1456,7 +1456,8 @@ void f8_fibers::sort() noexcept { fiber::sort(); }
 int f8_fibers::kill_all() noexcept
 {
 	int killed{};
-	for (GetVars(); auto& pp : sch)
+	GetVars();
+	for (auto& pp : sch)
 	{
 		if (pp->joinable() && !pp->is_detached() && !pp->is_main())
 		{
