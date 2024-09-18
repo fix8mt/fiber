@@ -481,7 +481,7 @@ __declspec(allocate(".text")) static constexpr unsigned char coroswitch_code[]
 		0x41, 0xff, 0xe0
 	};
 	using call_func = void (*)(fiber_base *old, fiber_base *newer);
-__declspec(allocate(".text")) static inline call_func coroswitch { reinterpret_cast<call_func>(static_cast<const unsigned char *>(coroswitch_code)) };
+	static inline call_func coroswitch;
 
 	__declspec(noinline) static size_t get_default_stacksz()
 	{
@@ -513,6 +513,7 @@ __declspec(allocate(".text")) static inline call_func coroswitch { reinterpret_c
 		_stk -= 27; // include flags
 		//asm(stmxcsr (*reinterpret_cast<uint32_t*>(_stk))); // preserve lower dword
 		//asm(fnstcw (*(reinterpret_cast<uint32_t*>(_stk) + 1))); // preserve upper dword, lower word
+		coroswitch == reinterpret_cast<call_func>(static_cast<const unsigned char *>(coroswitch_code));
 #else
 		std::memset(_stk - 6, 0x0, 6 * sizeof(uintptr_t)); // zero: rdi,rbp,r12,r13,r14,r15
 		_stk -= 7; // include flags
