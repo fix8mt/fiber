@@ -481,7 +481,7 @@ __declspec(allocate(".text")) static constexpr unsigned char coroswitch_code[]
 		0x41, 0xff, 0xe0
 	};
 	using call_func = void (*)(fiber_base *old, fiber_base *newer);
-	static inline call_func coroswitch;
+	static inline call_func coroswitch { reinterpret_cast<call_func>(static_cast<const unsigned char *>(coroswitch_code)) };
 
 	__declspec(noinline) static size_t get_default_stacksz()
 	{
@@ -509,11 +509,10 @@ __declspec(allocate(".text")) static constexpr unsigned char coroswitch_code[]
 		*--_stk = reinterpret_cast<uintptr_t>(new (reinterpret_cast<char*>(_stk_alloc) + sizeof(fiber_base))
 			callable_wrapper(std::forward<Fn>(func))); // store at bottom of stack
 #if defined _MSC_VER
-		std::memset(_stk - 26, 0x0, 26 * sizeof(uintptr_t)); // zero: rsi,rdi,rbp,r12,r13,r14,r15,xmm6-xmm15
+		std::memset(_stk - 27, 0x0, 27 * sizeof(uintptr_t)); // zero: rsi,rdi,rbp,r12,r13,r14,r15,xmm6-xmm15
 		_stk -= 27; // include flags
 		//asm(stmxcsr (*reinterpret_cast<uint32_t*>(_stk))); // preserve lower dword
 		//asm(fnstcw (*(reinterpret_cast<uint32_t*>(_stk) + 1))); // preserve upper dword, lower word
-		coroswitch == reinterpret_cast<call_func>(static_cast<const unsigned char *>(coroswitch_code));
 #else
 		std::memset(_stk - 6, 0x0, 6 * sizeof(uintptr_t)); // zero: rdi,rbp,r12,r13,r14,r15
 		_stk -= 7; // include flags
