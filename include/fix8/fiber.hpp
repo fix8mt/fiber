@@ -412,7 +412,7 @@ class alignas(64) fiber_base
 	}
 #else
 #pragma section(".text")
-__declspec(allocate(".text")) static constexpr unsigned char coroswitch_code[]
+__declspec(allocate(".text")) static unsigned char coroswitch_code[]
 	{
 		0x48, 0x39, 0xd1,
 		0x75, 0x01,
@@ -578,67 +578,7 @@ public:
 //-----------------------------------------------------------------------------------------
 // static void fiber_base::coroswitch(fiber_base *old, fiber_base *newer) noexcept; //aka _coroswitch
 // TODO other ABI
-#if defined _MSC_VER
-__asm{R"(.text
-.align 16
-.global coroswitch
-coroswitch:
-	cmpq %rdx,%rcx			/* prevent self-switch */
-	jne _doswitch
-	ret
-_doswitch:
-	subq $0xE8,%rsp
-   stmxcsr (%rsp)			/* save fpu/mx/sse flags */
-   fnstcw  4(%rsp)
-	movq %r15,8(%rsp)
-	movq %r14,8*2(%rsp)
-	movq %r13,8*3(%rsp)
-	movq %r12,8*4(%rsp)
-	movq %rbx,8*5(%rsp)
-	movq %rbp,8*6(%rsp)
-	movq %rdi,8*7(%rsp)
-	movq %rsi,8*8(%rsp)
-	movups %xmm6,8*9(%rsp)
-	movups %xmm7,8*11(%rsp)
-	movups %xmm8,8*13(%rsp)
-	movups %xmm9,8*15(%rsp)
-	movups %xmm10,8*17(%rsp)
-	movups %xmm11,8*19(%rsp)
-	movups %xmm12,8*21(%rsp)
-	movups %xmm13,8*23(%rsp)
-	movups %xmm14,8*25(%rsp)
-	movups %xmm15,8*27(%rsp)
-
-	movq %rsp,(%rdx)		/* save old user stack */
-	movq (%rcx),%rsp		/* restore new user stack */
-
-   ldmxcsr (%rsp)			/* restore fpu/mx/sse flags */
-   fldcw  4(%rsp)
-   movq 8(%rsp),%r15
-   movq 8*2(%rsp),%r14
-   movq 8*3(%rsp),%r13
-   movq 8*4(%rsp),%r12
-   movq 8*5(%rsp),%rbx
-   movq 8*6(%rsp),%rbp
-   movq 8*7(%rsp),%rdi
-   movq 8*8(%rsp),%rsi
-	movups 8*9(%rsp),%xmm6
-	movups 8*11(%rsp),%xmm7
-	movups 8*13(%rsp),%xmm8
-	movups 8*15(%rsp),%xmm9
-	movups 8*17(%rsp),%xmm10
-	movups 8*19(%rsp),%xmm11
-	movups 8*21(%rsp),%xmm12
-	movups 8*23(%rsp),%xmm13
-	movups 8*25(%rsp),%xmm14
-	movups 8*27(%rsp),%xmm15
-	movq 8*29(%rsp),%r8	/* get ret address */
-	addq $0xF0,%rsp		/* one extra qword for ret */
-   jmp *%r8					/* jump to new location */
-.size _coroswitch,.-_coroswitch
-.section .note.GNU-stack,"",%progbits
-)"};
-#elif defined __APPLE__
+#if defined __APPLE__
 asm(R"(.text
 .align 16
 .globl _coroswitch,@function
@@ -675,7 +615,7 @@ _doswitch:
 	jmp *%r8             /* jump to new location */
 .section "",%progbits
 )");
-#else
+#elif not defined _MSC_VER
 asm(R"(.text
 .align 16
 .type _coroswitch,@function
