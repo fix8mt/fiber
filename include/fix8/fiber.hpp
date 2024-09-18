@@ -39,8 +39,11 @@
 #define FIX8_FIBER_HPP_
 
 //----------------------------------------------------------------------------------------
+#if defined _MSC_VER && (_MSC_VER < 1910) || !defined _MSC_VER && (__cplusplus < 202002L)
+# error "fiber requires C++20 support"
+#endif
 #if defined _MSC_VER && (!defined(_M_IX86) && !defined(_M_X64)) || !defined _MSC_VER && !defined(__x86_64__)
-#error "this fiber implementation only runs on x86_64"
+# error "this fiber implementation only runs on x86_64"
 #endif
 
 //----------------------------------------------------------------------------------------
@@ -478,7 +481,7 @@ __declspec(allocate(".text")) static constexpr unsigned char coroswitch_code[]
 		0x41, 0xff, 0xe0
 	};
 	using call_func = void (*)(fiber_base *old, fiber_base *newer);
-	static constexpr call_func coroswitch { (call_func)coroswitch_code };
+	static inline call_func coroswitch { reinterpret_cast<call_func>(static_cast<const unsigned char *>(coroswitch_code)) };
 
 	__declspec(noinline) static size_t get_default_stacksz()
 	{

@@ -76,6 +76,7 @@ foreach(x ${esrc})
 	cmake_path(GET x STEM LAST_ONLY target)
 	add_executable(${target} ${x})
 	set_target_properties(${target} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED true)
+	target_compile_features(${target} PRIVATE cxx_std_20)
 	if(BUILD_ALL_WARNINGS)
 		target_compile_options(${target} PRIVATE
 		$<$<CXX_COMPILER_ID:MSVC>:/W4>
