@@ -478,7 +478,7 @@ __declspec(allocate(".text")) static constexpr unsigned char coroswitch_code[]
 		0x41, 0xff, 0xe0
 	};
 	using call_func = void (*)(fiber_base *old, fiber_base *newer);
-	static constexpr call_func coroswitch { reinterpret_cast<call_func>(coroswitch_code) };
+	static constexpr call_func coroswitch { (call_func)coroswitch_code };
 
 	__declspec(noinline) static size_t get_default_stacksz()
 	{
