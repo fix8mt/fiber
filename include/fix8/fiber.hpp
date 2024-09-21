@@ -414,7 +414,7 @@ class alignas(64) fiber_base
 		return sz;
 	}
 #else
-#pragma section(".text",read,execute)
+#pragma section(".text")
 __declspec(allocate(".text")) static constexpr unsigned char coroswitch_code[]
 	{
 		0x48, 0x39, 0xd1,
@@ -477,11 +477,11 @@ __declspec(allocate(".text")) static constexpr unsigned char coroswitch_code[]
 		0x00, 0x00,
 		0x4c, 0x8b, 0x84, 0x24, 0xe8, 0x00, 0x00,
 		0x00,
-		0x48, 0x81, 0xc4, 0xe8, 0x00, 0x00, 0x00,
-		0x41, 0x50, 0xc3,
+		0x48, 0x81, 0xc4, 0xf0, 0x00, 0x00, 0x00,
+		0x41, 0xff, 0xe0
 	};
 	using call_func = void (*)(fiber_base *old, fiber_base *newer);
-	static inline call_func coroswitch { reinterpret_cast<call_func>(static_cast<const unsigned char *>(coroswitch_code)) };
+__declspec(allocate(".text")) static inline call_func coroswitch { reinterpret_cast<call_func>(static_cast<const unsigned char *>(coroswitch_code)) };
 
 	__declspec(noinline) static size_t get_default_stacksz()
 	{
