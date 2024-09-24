@@ -45,6 +45,7 @@
 using namespace FIX8;
 
 //-----------------------------------------------------------------------------------------
+#if not defined _MSC_VER
 class foo
 {
 	std::queue<long> _queue;
@@ -83,12 +84,15 @@ public:
 		_produce.resume(); // switch to producer
 	}
 };
+#endif
 
 //-----------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
+#if not defined _MSC_VER
    std::cout << "main:entry\n";
    foo bar(argc > 1 ? std::stoi(argv[1]) : 10);
    std::cout << "main:exit\n";
+#endif
    return 0;
 }

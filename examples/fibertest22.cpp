@@ -64,7 +64,6 @@ std::ostream& operator<<(std::ostream& os, const uint128_t val) noexcept
 	}
 	return os;
 }
-#endif
 
 //-----------------------------------------------------------------------------------------
 template<typename T>
@@ -115,23 +114,22 @@ public:
 		_produce.resume(); // switch to producer
 	}
 };
+#endif
 
 //-----------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
+#if not defined _MSC_VER
    std::cout << "main:entry\n";
 	try
 	{
-#if not defined _MSC_VER
 		foo<uint128_t>(argc > 1 ? std::stoi(argv[1]) : 10);
-#else
-		foo<unsigned long long>(argc > 1 ? std::stoi(argv[1]) : 10);
-#endif
 	}
 	catch (const std::exception& e)
 	{
 		std::cerr << "exception: " << e.what() << std::endl;
 	}
    std::cout << "main:exit\n";
+#endif
    return 0;
 }
