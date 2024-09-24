@@ -113,7 +113,14 @@ class f8_spin_lock final
 	std::atomic_flag _sl;
 
 public:
-	void lock() noexcept { _sl.wait(true); } // std::memory_order_seq_cst
+	void lock() noexcept
+	{
+#if not defined _MSC_VER
+		_sl.wait(true); } // std::memory_order_seq_cst
+#else
+	while (!_sl.test_and_set());
+#endif
+	}
 	void unlock() noexcept { _sl.clear(); } // std::memory_order_seq_cst
 };
 
