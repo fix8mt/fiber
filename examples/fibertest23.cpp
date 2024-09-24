@@ -58,7 +58,7 @@ public:
 		for (int cnt{}; cnt < numtogen; ++cnt)
 		{
 			while(_queue.size() < 5)
-				_queue.push(std::uniform_int_distribution<long>(1, std::numeric_limits<long>()::max())(rnde));
+				_queue.push(std::uniform_int_distribution<long>(1, std::numeric_limits<long>::max())(rnde));
 			std::cout << "\tproduced: " << _queue.size() << '\n';
 			_consume.resume(); // switch to consumer
 		}
