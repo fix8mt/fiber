@@ -144,7 +144,7 @@ endif()
 # cmake -DBUILD_TESTS=false ..
 option(BUILD_TESTS "enable building unit tests" true)
 message("-- Build unit tests: ${BUILD_TESTS}")
-if(BUILD_TESTS)
+if(BUILD_TESTS AND NOT WIN32)
 	message(STATUS "Populating Catch2...")
 	include(FetchContent)
 	enable_testing()
