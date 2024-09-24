@@ -103,7 +103,7 @@
 # define FIX8_FIBER_MULTITHREADING_
 #endif
 
-#if defined FIBER_NO_INSTRUMENTATION
+#if !defined FIBER_NO_INSTRUMENTATION
 #include <sstream>
 #endif
 //-----------------------------------------------------------------------------------------
