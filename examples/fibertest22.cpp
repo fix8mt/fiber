@@ -76,7 +76,7 @@ class foo
    {
 		std::cout << "\tproducer:entry (id:" << this_fiber::get_id() << ")\n";
 		std::mt19937_64 rnde {std::random_device{}()};
-		auto dist{std::uniform_int_distribution<T>(1, std::numeric_limits<typename T>::max())};
+		auto dist{std::uniform_int_distribution<T>(1, std::numeric_limits<T>::max())};
       while (numtogen--)
       {
 			int cnt{};
