@@ -39,6 +39,7 @@
 using namespace FIX8;
 
 //-----------------------------------------------------------------------------------------
+#if not defined _MSC_VER
 using uint128_t = __uint128_t;
 
 std::ostream& operator<<(std::ostream& os, const uint128_t val) noexcept
@@ -62,6 +63,7 @@ std::ostream& operator<<(std::ostream& os, const uint128_t val) noexcept
 	}
 	return os;
 }
+#endif
 
 //-----------------------------------------------------------------------------------------
 template<typename T>
@@ -119,7 +121,11 @@ int main(int argc, char *argv[])
    std::cout << "main:entry\n";
 	try
 	{
+#if not defined _MSC_VER
 		foo<uint128_t>(argc > 1 ? std::stoi(argv[1]) : 10);
+#else
+		foo<unsigned long long>(argc > 1 ? std::stoi(argv[1]) : 10);
+#endif
 	}
 	catch (const std::exception& e)
 	{
