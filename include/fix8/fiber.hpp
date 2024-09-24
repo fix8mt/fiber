@@ -169,6 +169,7 @@ public:
 		return ostr.str();
 	}
 #endif
+	constexpr auto operator==(const fiber_id& other) const noexcept { return _ptr == other._ptr; }
 	constexpr auto operator<=>(const fiber_id& other) const noexcept { return _ptr <=> other._ptr; }
 	constexpr bool operator!() const noexcept { return _ptr == nullptr; }
 	constexpr explicit operator bool() const noexcept { return _ptr; }
