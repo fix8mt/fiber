@@ -44,6 +44,7 @@ using namespace FIX8;
 using namespace std::literals;
 
 //-----------------------------------------------------------------------------------------
+#if not defined _MSC_VER
 class foo
 {
 	bool tests[9]{};
@@ -152,10 +153,12 @@ public:
 		return os;
 	}
 };
+#endif
 
 //-----------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
+#if not defined _MSC_VER
 	foo bar(argc, argv);
 	std::cout << bar << std::endl;
 
@@ -207,5 +210,6 @@ int main(int argc, char *argv[])
 		std::cerr << "unknown exception\n";
 	}
 	std::cout << "exiting main\n";
+#endif
 	return 0;
 }
