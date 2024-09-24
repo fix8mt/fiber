@@ -103,9 +103,10 @@
 # define FIX8_FIBER_MULTITHREADING_
 #endif
 
-#if !defined FIBER_NO_INSTRUMENTATION
+#if defined FIX8_FIBER_INSTRUMENTATION_
 #include <sstream>
 #endif
+
 //-----------------------------------------------------------------------------------------
 namespace FIX8 {
 
@@ -121,7 +122,7 @@ public:
 #if not defined _MSC_VER
 		_sl.wait(true); } // std::memory_order_seq_cst
 #else
-	while (!_sl.test_and_set());
+		while (!_sl.test_and_set());
 #endif
 	}
 	void unlock() noexcept { _sl.clear(); } // std::memory_order_seq_cst
