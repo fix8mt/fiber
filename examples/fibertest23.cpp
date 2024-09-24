@@ -38,6 +38,7 @@
 #include <queue>
 #include <random>
 #include <string>
+#include <limits>
 #include <fix8/fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
