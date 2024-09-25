@@ -173,6 +173,8 @@ public:
 	constexpr auto operator==(const fiber_id& other) const noexcept { return _ptr == other._ptr; }
 #if not defined _MSC_VER
 	constexpr auto operator<=>(const fiber_id& other) const noexcept { return _ptr <=> other._ptr; }
+#else
+	constexpr auto operator<(const fiber_id& other) const noexcept { return _ptr < other._ptr; }
 #endif
 	constexpr bool operator!() const noexcept { return _ptr == nullptr; }
 	constexpr explicit operator bool() const noexcept { return _ptr; }
