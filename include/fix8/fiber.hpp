@@ -120,7 +120,7 @@ public:
 	void lock() noexcept
 	{
 #if not defined _MSC_VER
-		_sl.wait(true); } // std::memory_order_seq_cst
+		_sl.wait(true); // std::memory_order_seq_cst
 #else
 		while (!_sl.test_and_set());
 #endif
@@ -171,7 +171,9 @@ public:
 	}
 #endif
 	constexpr auto operator==(const fiber_id& other) const noexcept { return _ptr == other._ptr; }
-	//constexpr auto operator<=>(const fiber_id& other) const noexcept { return _ptr <=> other._ptr; }
+#if not defined _MSC_VER
+	constexpr auto operator<=>(const fiber_id& other) const noexcept { return _ptr <=> other._ptr; }
+#endif
 	constexpr bool operator!() const noexcept { return _ptr == nullptr; }
 	constexpr explicit operator bool() const noexcept { return _ptr; }
 	friend struct std::hash<fiber_id>;
@@ -224,12 +226,12 @@ struct f8_fibers
 	inline static void sort() noexcept;
 	inline static void wait_all() noexcept;
 	inline static std::exception_ptr get_exception_ptr() noexcept;
-	template<std::invocable Fn>
-	static void wait_all(Fn&&) noexcept;
+	template<std::invocable Fn, typename... Args>
+	static void wait_all(Fn&&, Args&&... args) noexcept;
 	inline static bool terminating() noexcept;
 	inline static void wait_any() noexcept;
-	template<std::invocable Fn>
-	static void wait_any(Fn&&) noexcept;
+	template<std::invocable Fn, typename... Args>
+	static void wait_any(Fn&&, Args&&... args) noexcept;
 #if defined FIX8_FIBER_INSTRUMENTATION_
 	inline static void print(std::ostream& os) noexcept;
 #endif
@@ -1530,8 +1532,8 @@ void f8_fibers::wait_all() noexcept
 	while(has_fibers())
 		f8_this_fiber::yield();
 }
-template<std::invocable Fn>
-void f8_fibers::wait_all(Fn&& func) noexcept
+template<std::invocable Fn, typename... Args>
+void f8_fibers::wait_all(Fn&& func, [[maybe_unused]] Args&&... args) noexcept
 {
 	while(has_fibers() && !func())
 		f8_this_fiber::yield();
@@ -1541,8 +1543,8 @@ void f8_fibers::wait_any() noexcept
 	while(!has_finished())
 		f8_this_fiber::yield();
 }
-template<std::invocable Fn>
-void f8_fibers::wait_any(Fn&& func) noexcept
+template<std::invocable Fn, typename... Args>
+void f8_fibers::wait_any(Fn&& func, [[maybe_unused]] Args&&... args) noexcept
 {
 	while(!has_finished() && !func())
 		f8_this_fiber::yield();
