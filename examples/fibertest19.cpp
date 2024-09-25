@@ -65,10 +65,12 @@ int main(void)
 		{ {.name="sub06",.stacksz=8192,.stack=make_stack<stack_type::placement>(stack_memory.get(), 8192)}, &func, 6 },
 		{ {.name="sub07",.stacksz=8192,.stack=make_stack<stack_type::placement>(stack_memory.get(), 2 * 8192)}, &func, 9 },
 		{ {.name="sub08",.stacksz=8192,.stack=make_stack<stack_type::placement>(stack_memory.get(), 3 * 8192)}, &func, 12 },
+#if not defined _MSC_VER
 		{ {.name="sub09",.stacksz=8192,.stack=make_stack<stack_type::mapped>()}, &func, 3 },
 		{ {.name="sub10",.stacksz=8192,.stack=make_stack<stack_type::mapped>()}, &func, 6 },
 		{ {.name="sub11",.stacksz=8192,.stack=make_stack<stack_type::mapped>()}, &func, 9 },
 		{ {.name="sub12",.stacksz=8192,.stack=make_stack<stack_type::mapped>()}, &func, 12 }
+#endif
 	}};
 	fibers::print();
 	for (int ii{}; fibers::has_fibers(); ++ii)
