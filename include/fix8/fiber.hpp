@@ -226,12 +226,20 @@ struct f8_fibers
 	inline static void sort() noexcept;
 	inline static void wait_all() noexcept;
 	inline static std::exception_ptr get_exception_ptr() noexcept;
-	template<std::invocable Fn, typename... Args>
-	static void wait_all(Fn&&, Args&&... args) noexcept;
+#if not defined _MSC_VER
+	template<std::invocable Fn>
+#else
+	template<typename Fn>
+#endif
+	static void wait_all(Fn&&) noexcept;
 	inline static bool terminating() noexcept;
 	inline static void wait_any() noexcept;
-	template<std::invocable Fn, typename... Args>
-	static void wait_any(Fn&&, Args&&... args) noexcept;
+#if not defined _MSC_VER
+	template<std::invocable Fn>
+#else
+	template<typename Fn>
+#endif
+	static void wait_any(Fn&&) noexcept;
 #if defined FIX8_FIBER_INSTRUMENTATION_
 	inline static void print(std::ostream& os) noexcept;
 #endif
@@ -1532,8 +1540,8 @@ void f8_fibers::wait_all() noexcept
 	while(has_fibers())
 		f8_this_fiber::yield();
 }
-template<std::invocable Fn, typename... Args>
-void f8_fibers::wait_all(Fn&& func, [[maybe_unused]] Args&&... args) noexcept
+template<std::invocable Fn>
+void f8_fibers::wait_all(Fn&& func) noexcept
 {
 	while(has_fibers() && !func())
 		f8_this_fiber::yield();
@@ -1543,8 +1551,8 @@ void f8_fibers::wait_any() noexcept
 	while(!has_finished())
 		f8_this_fiber::yield();
 }
-template<std::invocable Fn, typename... Args>
-void f8_fibers::wait_any(Fn&& func, [[maybe_unused]] Args&&... args) noexcept
+template<std::invocable Fn>
+void f8_fibers::wait_any(Fn&& func) noexcept
 {
 	while(!has_finished() && !func())
 		f8_this_fiber::yield();
