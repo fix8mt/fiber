@@ -226,19 +226,13 @@ struct f8_fibers
 	inline static void sort() noexcept;
 	inline static void wait_all() noexcept;
 	inline static std::exception_ptr get_exception_ptr() noexcept;
-#if not defined _MSC_VER
-	template<std::invocable Fn>
-#else
 	template<typename Fn>
-#endif
+	requires std::invocable<Fn>
 	static void wait_all(Fn&&) noexcept;
 	inline static bool terminating() noexcept;
 	inline static void wait_any() noexcept;
-#if not defined _MSC_VER
-	template<std::invocable Fn>
-#else
 	template<typename Fn>
-#endif
+	requires std::invocable<Fn>
 	static void wait_any(Fn&&) noexcept;
 #if defined FIX8_FIBER_INSTRUMENTATION_
 	inline static void print(std::ostream& os) noexcept;
@@ -581,7 +575,8 @@ __declspec(allocate(".text")) static constexpr unsigned char coroswitch_code[]
 		_flags{1 << main} {}
 
 public:
-	template<std::invocable Fn>
+	template<typename Fn>
+	requires std::invocable<Fn>
 	constexpr fiber_base(fiber_params&& params, Fn&& func, uintptr_t *sp, fiber_id parent) noexcept
 		: _stacksz(params.stacksz), _stk_alloc(sp), _params(std::move(params)), _pfid(parent),
 			_flags{(1 << notstarted) | (_params.join ? (1 << joinonexit) : 0ULL)}
@@ -1540,7 +1535,8 @@ void f8_fibers::wait_all() noexcept
 	while(has_fibers())
 		f8_this_fiber::yield();
 }
-template<std::invocable Fn>
+template<typename Fn>
+requires std::invocable<Fn>
 void f8_fibers::wait_all(Fn&& func) noexcept
 {
 	while(has_fibers() && !func())
@@ -1551,7 +1547,8 @@ void f8_fibers::wait_any() noexcept
 	while(!has_finished())
 		f8_this_fiber::yield();
 }
-template<std::invocable Fn>
+template<typename Fn>
+requires std::invocable<Fn>
 void f8_fibers::wait_any(Fn&& func) noexcept
 {
 	while(!has_finished() && !func())
