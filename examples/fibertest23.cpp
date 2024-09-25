@@ -38,14 +38,12 @@
 #include <queue>
 #include <random>
 #include <string>
-#include <limits>
 #include <fix8/fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
 
 //-----------------------------------------------------------------------------------------
-#if not defined _MSC_VER
 class foo
 {
 	std::queue<long> _queue;
@@ -59,7 +57,7 @@ public:
 		for (int cnt{}; cnt < numtogen; ++cnt)
 		{
 			while(_queue.size() < 5)
-				_queue.push(std::uniform_int_distribution<long>(1, std::numeric_limits<long>::max())(rnde));
+				_queue.push(std::uniform_int_distribution<long>(1, std::numeric_limits<long>().max())(rnde));
 			std::cout << "\tproduced: " << _queue.size() << '\n';
 			_consume.resume(); // switch to consumer
 		}
@@ -84,15 +82,12 @@ public:
 		_produce.resume(); // switch to producer
 	}
 };
-#endif
 
 //-----------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
-#if not defined _MSC_VER
    std::cout << "main:entry\n";
    foo bar(argc > 1 ? std::stoi(argv[1]) : 10);
    std::cout << "main:exit\n";
-#endif
    return 0;
 }

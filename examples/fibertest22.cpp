@@ -33,14 +33,12 @@
 //-----------------------------------------------------------------------------------------
 #include <queue>
 #include <random>
-#include <limits>
 #include <fix8/fiber.hpp>
 
 //-----------------------------------------------------------------------------------------
 using namespace FIX8;
 
 //-----------------------------------------------------------------------------------------
-#if not defined _MSC_VER
 using uint128_t = __uint128_t;
 
 std::ostream& operator<<(std::ostream& os, const uint128_t val) noexcept
@@ -76,7 +74,7 @@ class foo
    {
 		std::cout << "\tproducer:entry (id:" << this_fiber::get_id() << ")\n";
 		std::mt19937_64 rnde {std::random_device{}()};
-		auto dist{std::uniform_int_distribution<T>(1, std::numeric_limits<T>::max())};
+		auto dist{std::uniform_int_distribution<T>(1, std::numeric_limits<T>().max())};
       while (numtogen--)
       {
 			int cnt{};
@@ -114,12 +112,10 @@ public:
 		_produce.resume(); // switch to producer
 	}
 };
-#endif
 
 //-----------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
-#if not defined _MSC_VER
    std::cout << "main:entry\n";
 	try
 	{
@@ -130,6 +126,5 @@ int main(int argc, char *argv[])
 		std::cerr << "exception: " << e.what() << std::endl;
 	}
    std::cout << "main:exit\n";
-#endif
    return 0;
 }
