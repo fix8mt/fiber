@@ -83,7 +83,7 @@ foreach(x ${esrc})
 	target_compile_features(${target} PRIVATE cxx_std_20)
 	if(BUILD_ALL_WARNINGS)
 		target_compile_options(${target} PRIVATE
-		$<$<CXX_COMPILER_ID:MSVC>:/W4 /GT>
+		$<$<CXX_COMPILER_ID:MSVC>:/W4 /guard:cf- /GT>
 		$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>)
 	endif()
 	get_target_property(v1 ${target} CXX_STANDARD)
