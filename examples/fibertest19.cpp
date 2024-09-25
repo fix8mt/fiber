@@ -55,23 +55,26 @@ void func(int arg)
 int main(void)
 {
 	auto stack_memory { std::make_unique<char[]>(32768) };
-	std::array<fiber, 12> fbs
-	{{
-		{ {.name="sub01",.stacksz=8192}, &func, 3 },
-		{ {"sub02",99,false,8192}, &func, 6 },
-		{ {.name="sub03",.stacksz=8192}, &func, 9 },
-		{ {.name="sub04",.stacksz=8192}, &func, 12 },
-		{ {.name="sub05",.stacksz=8192,.stack=make_stack<stack_type::placement>(stack_memory.get())}, &func, 3 },
-		{ {.name="sub06",.stacksz=8192,.stack=make_stack<stack_type::placement>(stack_memory.get(), 8192)}, &func, 6 },
-		{ {.name="sub07",.stacksz=8192,.stack=make_stack<stack_type::placement>(stack_memory.get(), 2 * 8192)}, &func, 9 },
-		{ {.name="sub08",.stacksz=8192,.stack=make_stack<stack_type::placement>(stack_memory.get(), 3 * 8192)}, &func, 12 },
+	static auto fbs
+	{
+		std::to_array<fiber>
+		({
+			{ {.name="sub01",.stacksz=8192}, &func, 3 },
+			{ {"sub02",99,false,8192}, &func, 6 },
+			{ {.name="sub03",.stacksz=8192}, &func, 9 },
+			{ {.name="sub04",.stacksz=8192}, &func, 12 },
+			{ {.name="sub05",.stacksz=8192,.stack=make_stack<stack_type::placement>(stack_memory.get())}, &func, 3 },
+			{ {.name="sub06",.stacksz=8192,.stack=make_stack<stack_type::placement>(stack_memory.get(), 8192)}, &func, 6 },
+			{ {.name="sub07",.stacksz=8192,.stack=make_stack<stack_type::placement>(stack_memory.get(), 2 * 8192)}, &func, 9 },
+			{ {.name="sub08",.stacksz=8192,.stack=make_stack<stack_type::placement>(stack_memory.get(), 3 * 8192)}, &func, 12 },
 #if not defined _MSC_VER
-		{ {.name="sub09",.stacksz=8192,.stack=make_stack<stack_type::mapped>()}, &func, 3 },
-		{ {.name="sub10",.stacksz=8192,.stack=make_stack<stack_type::mapped>()}, &func, 6 },
-		{ {.name="sub11",.stacksz=8192,.stack=make_stack<stack_type::mapped>()}, &func, 9 },
-		{ {.name="sub12",.stacksz=8192,.stack=make_stack<stack_type::mapped>()}, &func, 12 }
+			{ {.name="sub09",.stacksz=8192,.stack=make_stack<stack_type::mapped>()}, &func, 3 },
+			{ {.name="sub10",.stacksz=8192,.stack=make_stack<stack_type::mapped>()}, &func, 6 },
+			{ {.name="sub11",.stacksz=8192,.stack=make_stack<stack_type::mapped>()}, &func, 9 },
+			{ {.name="sub12",.stacksz=8192,.stack=make_stack<stack_type::mapped>()}, &func, 12 }
 #endif
-	}};
+			})
+	};
 	fibers::print();
 	for (int ii{}; fibers::has_fibers(); ++ii)
 	{
