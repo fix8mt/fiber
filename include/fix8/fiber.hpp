@@ -540,7 +540,7 @@ __declspec(allocate(".text")) static constexpr unsigned char coroswitch_code[]
 #endif
 
 	template<typename Fn>
-	struct alignas(64) callable_wrapper
+	struct alignas(16) callable_wrapper
 	{
 		std::decay_t<Fn> _func;
 		constexpr callable_wrapper(Fn&& func) noexcept : _func(std::forward<Fn>(func)) {}
@@ -558,7 +558,6 @@ __declspec(allocate(".text")) static constexpr unsigned char coroswitch_code[]
 			callable_wrapper(std::forward<Fn>(func))); // store at bottom of stack
 #if defined _MSC_VER
 		DWORD old_protect;
-		VirtualProtect(_stk, sizeof(fiber_base), PAGE_EXECUTE_READWRITE, &old_protect);
 		std::memset(_stk - 32, 0x0, 32 * sizeof(uintptr_t)); // zero: rsi,rdi,rbp,r12,r13,r14,r15,xmm6-xmm15
 		_stk -= 32; // include flags
 		//asm(stmxcsr (*reinterpret_cast<uint32_t*>(_stk))); // preserve lower dword
