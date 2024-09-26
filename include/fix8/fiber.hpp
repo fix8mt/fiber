@@ -557,6 +557,8 @@ __declspec(allocate(".text")) static constexpr unsigned char coroswitch_code[]
 		*--_stk = reinterpret_cast<uintptr_t>(new (reinterpret_cast<char*>(_stk_alloc) + sizeof(fiber_base))
 			callable_wrapper(std::forward<Fn>(func))); // store at bottom of stack
 #if defined _MSC_VER
+		DWORD old_protect;
+		VirtualProtect(_stk, sizeof(fiber_base), PAGE_EXECUTE_READWRITE, &old_protect);
 		std::memset(_stk - 32, 0x0, 32 * sizeof(uintptr_t)); // zero: rsi,rdi,rbp,r12,r13,r14,r15,xmm6-xmm15
 		_stk -= 32; // include flags
 		//asm(stmxcsr (*reinterpret_cast<uint32_t*>(_stk))); // preserve lower dword
