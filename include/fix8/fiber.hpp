@@ -540,7 +540,7 @@ __declspec(allocate(".text")) static constexpr unsigned char coroswitch_code[]
 #endif
 
 	template<typename Fn>
-	struct callable_wrapper
+	struct alignas(64) callable_wrapper
 	{
 		std::decay_t<Fn> _func;
 		constexpr callable_wrapper(Fn&& func) noexcept : _func(std::forward<Fn>(func)) {}
