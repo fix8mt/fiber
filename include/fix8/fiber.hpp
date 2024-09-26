@@ -432,7 +432,7 @@ class alignas(64) fiber_base
 		return sz;
 	}
 #else
-#pragma section(".text")
+#pragma section(".text", read,execute)
 __declspec(allocate(".text")) static constexpr unsigned char coroswitch_code[]
 	{
 		0x48, 0x39, 0xd1,
